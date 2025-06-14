@@ -29,7 +29,7 @@ from PIL import Image, ImageDraw, ImageFont
 dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
 load_dotenv(dotenv_path)
 
-from .database import SessionLocal, engine, base
+from .database import SessionLocal, engine, Base
 from . import models
 from .schemas import BulkDeleteRequest
 from .utils import get_client_ip, log_error

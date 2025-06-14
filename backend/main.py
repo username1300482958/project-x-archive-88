@@ -514,10 +514,10 @@ def download_logo(
         "logo_url": logo_url
     }
 
-@app.on_event("startup")
-@repeat_every(seconds=86400)  # 24시간마다 자동 실행
-def schedule_s3_cleanup():
-    clean_expired_s3_logos()
+# @app.on_event("startup")
+# @repeat_every(seconds=86400)  # 24시간마다 자동 실행
+# def schedule_s3_cleanup():
+#     clean_expired_s3_logos()
 
 @app.post("/users/")
 def create_user(username: str, email: str, db: Session = Depends(get_db)):

@@ -514,11 +514,6 @@ def download_logo(
         "logo_url": logo_url
     }
 
-# @app.on_event("startup")
-# @repeat_every(seconds=86400)  # 24시간마다 자동 실행
-# def schedule_s3_cleanup():
-#     clean_expired_s3_logos()
-
 @app.post("/users/")
 def create_user(username: str, email: str, db: Session = Depends(get_db)):
     user = models.User(username=username, email=email)
@@ -610,11 +605,11 @@ app.include_router(payment_router)
 async def get_google_client_id():
     return {"client_id": os.getenv("GOOGLE_CLIENT_ID")}
 
-# --- 예약 작업 ---
-@app.on_event("startup")
-@repeat_every(seconds=86400) # 24시간마다 자동 실행
-def schedule_s3_cleanup():
-    clean_expired_s3_logos()
+# # --- 예약 작업 ---
+# @app.on_event("startup")
+# @repeat_every(seconds=86400) # 24시간마다 자동 실행
+# def schedule_s3_cleanup():
+#     clean_expired_s3_logos()
 
 # --- 메인 실행 ---
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, HTTPException
-from backend.auth_jwt_utils import create_access_token
+from .auth_jwt_utils import create_access_token
 import requests
 import os
 

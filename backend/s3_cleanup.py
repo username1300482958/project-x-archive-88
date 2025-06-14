@@ -2,9 +2,9 @@ import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
-from backend.database import SessionLocal
-from backend.models import Logo, User
-from backend.s3_utils import delete_from_s3
+from .database import SessionLocal
+from .models import Logo, User
+from .s3_utils import delete_from_s3
 
 # 환경 변수 로드
 load_dotenv()

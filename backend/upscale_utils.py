@@ -3,7 +3,7 @@ import tempfile
 import requests
 import replicate
 from uuid import uuid4
-from backend.s3_utils import upload_to_s3, generate_presigned_url_from_s3_url
+from .s3_utils import upload_to_s3, generate_presigned_url_from_s3_url
 
 # 1) .env에 REPLICATE_API_TOKEN 설정 여부 확인
 REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")

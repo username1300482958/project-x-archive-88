@@ -11,7 +11,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import relationship
-from backend.database import Base  # 혹은 from .database import Base (상황에 따라)
+from .database import Base
 from datetime import datetime
 
 # 사용자 테이블

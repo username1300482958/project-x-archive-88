@@ -1,5 +1,5 @@
-from backend.database import SessionLocal
-from backend.models import ErrorLog, User
+from .database import SessionLocal
+from .models import ErrorLog, User
 from fastapi import Request
 
 def get_client_ip(request: Request) -> str:

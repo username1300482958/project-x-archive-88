@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from backend.auth_jwt_utils import get_current_user
-from backend.database import get_db
-from backend.models import User, Logo
-from backend.upscale_utils import upscale_image_with_replicate
+from .auth_jwt_utils import get_current_user
+from .database import get_db
+from .models import User, Logo
+from .upscale_utils import upscale_image_with_replicate
 import os
 
 router = APIRouter()

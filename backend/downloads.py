@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from backend.auth_jwt_utils import verify_token, get_user_id_from_token
-from backend.database import get_db
-from backend.models import User, Download
-from backend.auth_jwt_utils import get_current_user
-from backend.models import Logo
+from .auth_jwt_utils import verify_token, get_user_id_from_token
+from .database import get_db
+from .models import User, Download
+from .auth_jwt_utils import get_current_user
+from .models import Logo
 print("✅ downloads.py 라우터 파일 로드됨")  # 맨 처음에 넣기
 import logging
 logger = logging.getLogger(__name__)

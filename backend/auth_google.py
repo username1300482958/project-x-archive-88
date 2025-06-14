@@ -3,9 +3,9 @@ import requests
 from fastapi import APIRouter, Request, HTTPException, Depends
 from urllib.parse import urlencode
 from sqlalchemy.orm import Session
-from backend.auth_jwt_utils import create_access_token
-from backend.database import get_db
-from backend.models import User
+from .auth_jwt_utils import create_access_token
+from .database import get_db
+from .models import User
 from starlette.responses import RedirectResponse
 from fastapi.responses import JSONResponse
 

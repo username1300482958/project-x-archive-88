@@ -29,32 +29,27 @@ from PIL import Image, ImageDraw, ImageFont
 dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
 load_dotenv(dotenv_path)
 
-# --- 👇 여기에 추가합니다 ---
-from backend import models
-from backend.database import engine, Base
-# --- 👆 여기까지 ---
-
-from backend.database import SessionLocal
-from backend.models import User, Logo, Download, Favorite, ErrorLog
-from backend.schemas import BulkDeleteRequest
-from backend.utils import get_client_ip, log_error
-from backend.utils_watermark import apply_rotated_watermark
-from backend.s3_utils import upload_to_s3, generate_presigned_url_from_s3_url, delete_from_s3
-from backend.s3_cleanup import clean_expired_s3_logos
-from backend.openai_utils import generate_logo_image
-from backend.logo_prompt_optimizer import generate_prompt_with_gpt
-from backend.auth_jwt_utils import verify_token
-from backend.auth_jwt_utils import get_current_user
-from backend.config import BASE_BACKEND_URL
+from .database import SessionLocal, engine, base
+from . import models
+from .schemas import BulkDeleteRequest
+from .utils import get_client_ip, log_error
+from .utils_watermark import apply_rotated_watermark
+from .s3_utils import upload_to_s3, generate_presigned_url_from_s3_url, delete_from_s3
+from .s3_cleanup import clean_expired_s3_logos
+from .openai_utils import generate_logo_image
+from .logo_prompt_optimizer import generate_prompt_with_gpt
+from .auth_jwt_utils import verify_token
+from .auth_jwt_utils import get_current_user
+from .config import BASE_BACKEND_URL
 
 # 라우터 import
-from backend import admin
-from backend.auth_jwt import router as jwt_auth_router
-from backend.auth_google import router as google_auth_router
-from backend.payments import router as payment_router
-from backend.downloads import router as downloads_router
-from backend.download_upscaled import router as download_upscaled_router
-from backend.favorites import router as favorites_router
+from . import admin
+from .auth_jwt import router as jwt_auth_router
+from .auth_google import router as google_auth_router
+from .payments import router as payment_router
+from .downloads import router as downloads_router
+from .download_upscaled import router as download_upscaled_router
+from .favorites import router as favorites_router
 
 
 # --- FastAPI 앱 초기화 및 설정 ---
@@ -197,12 +192,12 @@ async def generate_logo(
     # ✅ abuse 방지 필터링: 최근 3시간 이내 동일 IP에서 다른 FREE 계정 생성 기록 확인
     three_hours_ago = datetime.utcnow() - timedelta(hours=3)
     recent_free_user_ids = (
-        db.query(User.id)
-        .join(Logo, User.id == Logo.user_id)
+        db.query(models.User.id)
+        .join(models.Logo, models.User.id == models.Logo.user_id)
         .filter(
-            User.plan == "FREE",
-            Logo.created_at >= three_hours_ago,
-            Logo.user_id != request.user_id
+            models.User.plan == "FREE",
+            models.Logo.created_at >= three_hours_ago,
+            models.Logo.user_id != request.user_id
         )
         .distinct()
         .all()
@@ -211,10 +206,10 @@ async def generate_logo(
 
     if recent_user_ids:
         recent_ips = (
-            db.query(ErrorLog.user_id, ErrorLog.message)
+            db.query(models.ErrorLog.user_id, models.ErrorLog.message)
             .filter(
-                ErrorLog.user_id.in_(recent_user_ids),
-                ErrorLog.context == "AbuseCheck"
+                models.ErrorLog.user_id.in_(recent_user_ids),
+                models.ErrorLog.context == "AbuseCheck"
             )
             .all()
         )
@@ -227,9 +222,9 @@ async def generate_logo(
     log_error(user_id=request.user_id, context="AbuseCheck", message=client_ip)
 
     # ✅ 사용자 조회 또는 생성
-    user_obj = db.query(User).filter(User.id == request.user_id).first()
+    user_obj = db.query(models.User).filter(models.User.id == request.user_id).first()
     if not user_obj:
-        user_obj = User(
+        user_obj = models.User(
             id=request.user_id,
             username=request.user_id,
             email=f"{request.user_id}@example.com",
@@ -256,7 +251,7 @@ async def generate_logo(
         )
 
     # 총 개수 제한 체크
-    current_count = db.query(Logo).filter(Logo.user_id == request.user_id).count()
+    current_count = db.query(models.Logo).filter(models.Logo.user_id == request.user_id).count()
     if current_count + new_logos_count > limits["max_total"]:
         raise HTTPException(
             status_code=403,
@@ -328,7 +323,7 @@ async def generate_logo(
             if s3_url_original:
                 break
 
-        db_logo = Logo(
+        db_logo = models.Logo(
             user_id=request.user_id,
             logo_path=logo_path,
             s3_url=s3_url if s3_url else "",
@@ -366,21 +361,21 @@ def get_user_logos(
     if user_id != user["sub"]:
         raise HTTPException(status_code=403, detail="권한이 없습니다.")
 
-    query = db.query(Logo).filter(Logo.user_id == user_id)
+    query = db.query(models.Logo).filter(models.Logo.user_id == user_id)
 
     if style:
-        query = query.filter(Logo.logo_style == style)
+        query = query.filter(models.Logo.logo_style == style)
     if colors:
         color_filters = colors.split(",")
-        query = query.filter(and_(*(Logo.colors.like(f"%{color}%") for color in color_filters)))
+        query = query.filter(and_(*(models.Logo.colors.like(f"%{color}%") for color in color_filters)))
     if brand_name:
-        query = query.filter(Logo.brand_name.like(f"%{brand_name}%"))
+        query = query.filter(models.Logo.brand_name.like(f"%{brand_name}%"))
 
     total_count = query.count()
     logos = query.offset(offset).limit(limit).all()
 
     favorite_logo_ids = set(
-        row.logo_id for row in db.query(Favorite.logo_id).filter_by(user_id=int(user_id)).all()
+        row.logo_id for row in db.query(models.Favorite.logo_id).filter_by(user_id=int(user_id)).all()
     )
 
     return {
@@ -409,7 +404,7 @@ def get_logo_count(
     # 🔒 권한검사
     if user_id != user["sub"]:
         raise HTTPException(status_code=403, detail="권한이 없습니다.")
-    count = db.query(Logo).filter(Logo.user_id == user_id).count()
+    count = db.query(models.Logo).filter(models.Logo.user_id == user_id).count()
     return {"user_id": user_id, "logo_count": count}
 
 @app.get("/logos/{user_id}/{folder}/{logo_filename}")
@@ -437,7 +432,7 @@ def get_user_logo_history(
     # 🔒 권한검사
     if user_id != user["sub"]:
         raise HTTPException(status_code=403, detail="권한이 없습니다.")
-    logos = db.query(Logo).filter(Logo.user_id == user_id).all()
+    logos = db.query(models.Logo).filter(models.Logo.user_id == user_id).all()
     if not logos:
         return {"message": "No logo history found for this user."}
     return {
@@ -466,7 +461,7 @@ def download_logo(
         raise HTTPException(status_code=403, detail="권한이 없습니다.")
 
     # ✅ 사용자 요금제 확인
-    user_obj = db.query(User).filter(User.id == user_id).first()
+    user_obj = db.query(models.User).filter(models.User.id == user_id).first()
     if not user_obj:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -474,7 +469,7 @@ def download_logo(
     limits = PLAN_CONFIG.get(plan, PLAN_CONFIG["FREE"])
 
     # ✅ 현재까지 다운로드한 개수 확인
-    download_count = db.query(Download).filter(Download.user_id == user_id).count()
+    download_count = db.query(models.Download).filter(models.Download.user_id == user_id).count()
     if download_count >= limits["max_download"]:
         raise HTTPException(
             status_code=403,
@@ -482,11 +477,11 @@ def download_logo(
         )
 
     # ✅ 로고 조회 및 다운로드 기록 저장
-    logo = db.query(Logo).filter(Logo.id == logo_id).first()
+    logo = db.query(models.Logo).filter(models.Logo.id == logo_id).first()
     if not logo:
         raise HTTPException(status_code=404, detail="Logo not found")
 
-    new_download = Download(user_id=user_id, logo_id=logo_id)
+    new_download = models.Download(user_id=user_id, logo_id=logo_id)
     db.add(new_download)
     db.commit()
 
@@ -504,7 +499,7 @@ def schedule_s3_cleanup():
 
 @app.post("/users/")
 def create_user(username: str, email: str, db: Session = Depends(get_db)):
-    user = User(username=username, email=email)
+    user = models.User(username=username, email=email)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -516,7 +511,7 @@ def delete_logo(
     db: Session = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    logo = db.query(Logo).filter(Logo.id == logo_id).first()
+    logo = db.query(models.Logo).filter(models.Logo.id == logo_id).first()
     if not logo:
         raise HTTPException(status_code=404, detail="Logo not found")
     # 🔒 권한검사
@@ -541,9 +536,9 @@ def delete_logos(
     # 🔒 권한검사
     if request.user_id != user["sub"]:
         raise HTTPException(status_code=403, detail="권한이 없습니다.")
-    logos_to_delete = db.query(Logo).filter(
-        Logo.user_id == request.user_id,
-        Logo.id.in_(request.logo_ids)
+    logos_to_delete = db.query(models.Logo).filter(
+        models.Logo.user_id == request.user_id,
+        models.Logo.id.in_(request.logo_ids)
     ).all()
     if not logos_to_delete:
         raise HTTPException(status_code=404, detail="삭제할 로고가 없습니다.")
@@ -563,7 +558,7 @@ def get_user_plan(user_id: str, db: Session = Depends(get_db)):
         print("❗ 경고: 잘못된 user_id로 /user/{user_id} 호출됨 → user_id =", user_id)
         traceback.print_stack()
 
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 

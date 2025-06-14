@@ -6,8 +6,8 @@ from typing import Optional
 from fastapi import Header
 from fastapi.security import OAuth2PasswordBearer
 from starlette.status import HTTP_401_UNAUTHORIZED
-from backend.database import SessionLocal
-from backend.models import User
+from .database import SessionLocal
+from .models import User
 
 # ✅ 관리자 이메일 리스트
 ADMIN_EMAILS = ["alohad0han@gmail.com"]  # 👉 여기에 네 이메일 넣어

@@ -14,9 +14,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text # ✅ 수정됨: text 함수 import 추가
 from starlette.responses import RedirectResponse
 
-from backend.auth_jwt_utils import get_current_user
-from backend.database import SessionLocal, get_db # [추가] get_db 임포트
-from backend.models import User, Order # [추가] Order 모델 임포트
+from .auth_jwt_utils import get_current_user
+from .database import SessionLocal, get_db # [추가] get_db 임포트
+from .models import User, Order # [추가] Order 모델 임포트
 
 # --- 초기 설정 ---
 load_dotenv()

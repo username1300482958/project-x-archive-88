@@ -4,7 +4,7 @@ import time
 import logging  # 추가: 로깅용
 from dotenv import load_dotenv
 from botocore.exceptions import NoCredentialsError
-from backend.utils import log_error  # log_error 함수 import
+from .utils import log_error  # log_error 함수 import
 
 # 환경 변수 로드 (.env 파일에 AWS 관련 정보가 있어야 함)
 load_dotenv()

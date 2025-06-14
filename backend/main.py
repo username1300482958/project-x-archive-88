@@ -7,6 +7,7 @@ import logging
 import shutil
 import re
 import traceback
+import inspect
 from email.mime.text import MIMEText
 from email.header import Header
 from datetime import datetime, timedelta
@@ -54,6 +55,27 @@ from .favorites import router as favorites_router
 
 # --- FastAPI 앱 초기화 및 설정 ---
 app = FastAPI()
+
+# --- 최종 디버깅 및 강제 등록 코드 ---
+from .auth_google import get_google_auth_url
+
+# 현재 앱에 등록된 모든 라우트를 출력해서 확인합니다.
+@app.on_event("startup")
+def print_all_routes():
+    print("--- 등록된 모든 API 라우트 ---")
+    for route in app.routes:
+        if hasattr(route, "methods"):
+            print(f"Path: {route.path}, Methods: {route.methods}, Name: {route.name}")
+    print("--------------------------")
+
+# 문제가 되는 라우트를 수동으로, 직접, 강제로 등록합니다.
+app.add_api_route(
+    "/auth/google",
+    get_google_auth_url,
+    methods=["GET"],
+    name="get_google_auth_url_manual"
+)
+# --- 여기까지 ---
 
 # --- 👇 여기에 추가합니다 ---
 models.Base.metadata.create_all(bind=engine)

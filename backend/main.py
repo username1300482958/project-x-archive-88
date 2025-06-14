@@ -29,6 +29,11 @@ from PIL import Image, ImageDraw, ImageFont
 dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
 load_dotenv(dotenv_path)
 
+# --- 👇 여기에 추가합니다 ---
+from backend import models
+from backend.database import engine, Base
+# --- 👆 여기까지 ---
+
 from backend.database import SessionLocal
 from backend.models import User, Logo, Download, Favorite, ErrorLog
 from backend.schemas import BulkDeleteRequest
@@ -54,6 +59,10 @@ from backend.favorites import router as favorites_router
 
 # --- FastAPI 앱 초기화 및 설정 ---
 app = FastAPI()
+
+# --- 👇 여기에 추가합니다 ---
+models.Base.metadata.create_all(bind=engine)
+# --- 👆 여기까지 ---
 
 # CORS 미들웨어 설정
 app.add_middleware(

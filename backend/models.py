@@ -86,9 +86,9 @@ class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
-    order_id = Column(String, unique=True, index=True)
-    user_id = Column(String, index=True)
-    plan_id = Column(String)
-    logo_id = Column(String, nullable=True)
-    status = Column(String, default="pending")  # pending / paid / failed
+    order_id = Column(String(255), unique=True, index=True)
+    user_id = Column(String(255), index=True)
+    plan_id = Column(String(255))
+    logo_id = Column(String(255), nullable=True)
+    status = Column(String(255), default="pending")  # pending / paid / failed
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -20,7 +20,7 @@ class User(Base):
     id = Column(String(255), primary_key=True, index=True)  # ✅ 수정됨
     username = Column(String(255), unique=True, nullable=False)
     email = Column(String(255), unique=True, nullable=False)
-    name = Column(String)
+    name = Column(String(255))
     created_at = Column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     plan = Column(String(20), default="FREE")
     plan_changed_at = Column(DateTime, default=datetime.utcnow)  # ✅ 추가됨

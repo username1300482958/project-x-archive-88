@@ -1,6 +1,6 @@
 import os
 import requests
-import traceback  # 디버깅을 위한 traceback 모듈 추가
+import traceback
 from fastapi import APIRouter, Request, HTTPException, Depends
 from urllib.parse import urlencode
 from sqlalchemy.orm import Session
@@ -12,13 +12,16 @@ from fastapi.responses import JSONResponse
 
 router = APIRouter()
 
-# 이 부분은 그대로 둡니다.
+# --- 환경 변수 로드 ---
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
+# ✅ [수정] 백엔드의 리디렉션 URI는 이제 구글로 요청을 보낼 때만 사용됩니다.
+BACKEND_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI") 
+# ✅ [추가] 최종적으로 사용자를 보낼 프론트엔드의 주소를 환경 변수에서 가져옵니다.
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "https://brandieai.com")
 
 # ==============================================================================
-# 아래의 모든 함수에 디버깅용 try...except 구문과 print 로그를 추가했습니다.
+# 디버깅용 코드는 문제 해결에 도움이 될 수 있으므로 그대로 유지했습니다.
 # ==============================================================================
 
 @router.get("/auth/google/redirect")
@@ -28,9 +31,9 @@ def redirect_login_to_google():
     """
     print("--- ✅ /auth/google/redirect API가 호출되었습니다. ---")
     try:
-        # 환경 변수가 제대로 로드되었는지 확인 (가장 중요한 부분)
-        if not GOOGLE_CLIENT_ID or not REDIRECT_URI:
-            print("--- 🚨 치명적 오류: GOOGLE_CLIENT_ID 또는 REDIRECT_URI 환경 변수가 설정되지 않았습니다! ---")
+        # ✅ [수정] REDIRECT_URI를 BACKEND_REDIRECT_URI로 명확하게 변경
+        if not GOOGLE_CLIENT_ID or not BACKEND_REDIRECT_URI:
+            print("--- 🚨 치명적 오류: GOOGLE_CLIENT_ID 또는 GOOGLE_REDIRECT_URI 환경 변수가 설정되지 않았습니다! ---")
             raise ValueError("Google OAuth 환경 변수가 설정되지 않았습니다.")
         
         print(f"--- ⚙️ 환경 변수 확인 완료. GOOGLE_CLIENT_ID: {'설정됨' if GOOGLE_CLIENT_ID else '누락됨'}")
@@ -40,7 +43,7 @@ def redirect_login_to_google():
             "client_id": GOOGLE_CLIENT_ID,
             "response_type": "code",
             "scope": "openid email profile",
-            "redirect_uri": REDIRECT_URI,
+            "redirect_uri": BACKEND_REDIRECT_URI, # ✅ [수정]
             "access_type": "offline",
             "prompt": "consent",
         }
@@ -62,13 +65,13 @@ def redirect_login_to_google():
 @router.get("/auth/google")
 def get_google_auth_url():
     """
-    프론트엔드에서 fetch 호출 시 JSON으로 auth_url을 반환합니다. (현재 문제가 되는 부분)
+    프론트엔드에서 fetch 호출 시 JSON으로 auth_url을 반환합니다.
     """
     print("--- ✅ /auth/google API가 호출되었습니다. ---")
     try:
-        # 환경 변수가 제대로 로드되었는지 확인 (가장 중요한 부분)
-        if not GOOGLE_CLIENT_ID or not REDIRECT_URI:
-            print("--- 🚨 치명적 오류: GOOGLE_CLIENT_ID 또는 REDIRECT_URI 환경 변수가 설정되지 않았습니다! ---")
+        # ✅ [수정] REDIRECT_URI를 BACKEND_REDIRECT_URI로 명확하게 변경
+        if not GOOGLE_CLIENT_ID or not BACKEND_REDIRECT_URI:
+            print("--- 🚨 치명적 오류: GOOGLE_CLIENT_ID 또는 GOOGLE_REDIRECT_URI 환경 변수가 설정되지 않았습니다! ---")
             raise ValueError("Google OAuth 환경 변수가 설정되지 않았습니다.")
         
         print(f"--- ⚙️ 환경 변수 확인 완료. GOOGLE_CLIENT_ID: {'설정됨' if GOOGLE_CLIENT_ID else '누락됨'}")
@@ -78,7 +81,7 @@ def get_google_auth_url():
             "client_id": GOOGLE_CLIENT_ID,
             "response_type": "code",
             "scope": "openid email profile",
-            "redirect_uri": REDIRECT_URI,
+            "redirect_uri": BACKEND_REDIRECT_URI, # ✅ [수정]
             "access_type": "offline",
             "prompt": "consent",
         }
@@ -101,7 +104,7 @@ def get_google_auth_url():
 @router.get("/auth/google/callback/")
 def google_callback(request: Request, code: str, db: Session = Depends(get_db)):
     """
-    구글 로그인 후 리디렉션되는 URL. 안정성 강화를 위해 디버깅 코드 추가.
+    구글 로그인 후, 최종 토큰을 프론트엔드로 전달하며 리디렉션 시킵니다.
     """
     print("--- ✅ /auth/google/callback API가 호출되었습니다. ---")
     try:
@@ -115,7 +118,7 @@ def google_callback(request: Request, code: str, db: Session = Depends(get_db)):
             "code": code,
             "client_id": GOOGLE_CLIENT_ID,
             "client_secret": GOOGLE_CLIENT_SECRET,
-            "redirect_uri": REDIRECT_URI,
+            "redirect_uri": BACKEND_REDIRECT_URI, # ✅ [수정]
             "grant_type": "authorization_code",
         }
         token_resp = requests.post(token_url, data=data)
@@ -145,7 +148,7 @@ def google_callback(request: Request, code: str, db: Session = Depends(get_db)):
         if not user_id:
             raise HTTPException(status_code=401, detail="Google user ID not found")
 
-        # 3. DB에 유저 저장 또는 병합
+        # 3. DB에 유저 저장 또는 병합 (기존과 동일)
         print("--- ⚙️ DB 작업을 시작합니다. ---")
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
@@ -161,11 +164,25 @@ def google_callback(request: Request, code: str, db: Session = Depends(get_db)):
         db.commit()
         print("--- ✅ DB 작업 완료. ---")
 
-        # 4. JWT 발급
+        # 4. JWT 발급 (기존과 동일)
         jwt_token = create_access_token({"sub": user_id, "email": email, "name": name})
 
-        # 5. JSON 응답으로 반환
-        return { "access_token": jwt_token, "user_id": user_id, "email": email }
+        # ✅ 5. [핵심 수정] JSON 반환 대신, JWT를 담아 프론트엔드로 리디렉션
+        # 프론트엔드의 UnifiedLoginCallback.tsx 코드가 이 파라미터들을 읽어서 처리합니다.
+        params = {
+            "jwt": jwt_token,
+            "user_id": user_id,
+        }
+        
+        # 로그인 성공 후 최종적으로 이동할 프론트엔드의 페이지 주소입니다.
+        # 이 경로는 프론트엔드 Framer/React 라우팅 설정과 일치해야 합니다.
+        final_redirect_path = "/auth/google/callback"
+        
+        # 전체 리디렉션 URL 생성 (예: https://brandieai.com/auth/google/callback?jwt=...&user_id=...)
+        redirect_url = f"{FRONTEND_BASE_URL.rstrip('/')}{final_redirect_path}?{urlencode(params)}"
+        
+        print(f"--- ✅ 최종 리디렉션 URL: {redirect_url} ---")
+        return RedirectResponse(url=redirect_url)
 
     except Exception as e:
         db.rollback()

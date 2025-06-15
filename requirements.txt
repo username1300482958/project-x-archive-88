@@ -89,6 +89,7 @@ typer
 typing-inspect
 typing_extensions
 tzdata
+traceback
 ujson
 urllib3
 uvicorn

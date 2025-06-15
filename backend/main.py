@@ -55,7 +55,7 @@ from .favorites import router as favorites_router
 
 # --- FastAPI 앱 초기화 및 설정 ---
 app = FastAPI()
-
+app.include_router(google_auth_router)
 # --- 최종 디버깅 및 강제 등록 코드 ---
 from .auth_google import get_google_auth_url
 

@@ -149,6 +149,7 @@ class LogoRequest(BaseModel):
     batch_size: int = 1
     style_detail: Optional[str] = None
     background: Optional[str] = None
+    core_object: Optional[str] = None
 
 class ContactForm(BaseModel):
     name: str
@@ -309,6 +310,7 @@ async def generate_logo(
             font_style=request.font_style or "modern sans-serif",
             colors=request.colors,
             style_detail=request.style_detail,
+            core_object=request.core_object,
             background=request.background or "black"
         )
         # ✅ 디버깅용 출력

@@ -21,7 +21,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi_utils.tasks import repeat_every
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy import and_, text
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont
 
@@ -30,7 +30,7 @@ from PIL import Image, ImageDraw, ImageFont
 dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
 load_dotenv(dotenv_path)
 
-from .database import SessionLocal, engine, Base
+from .database import SessionLocal, engine, Base, get_db
 from . import models
 from .schemas import BulkDeleteRequest
 from .utils import get_client_ip, log_error
@@ -587,6 +587,27 @@ def get_user_plan(user_id: str, db: Session = Depends(get_db)):
         "plan": plan,
         **limits
     }
+
+@app.get("/test-db-connection", tags=["테스트"])
+def test_db_connection(db: Session = Depends(get_db)):
+    """
+    Render 서버에서 Railway DB로의 연결을 직접 테스트하는 임시 API
+    """
+    try:
+        # DB에 아주 간단한 쿼리를 실행하여 연결을 테스트합니다.
+        db.execute(text("SELECT 1"))
+        return {"status": "success", "message": "✅ 데이터베이스 연결에 성공했습니다!"}
+    except Exception as e:
+        # 연결 실패 시, 오류 메시지를 자세히 반환합니다.
+        # traceback을 포함하여 어떤 종류의 오류인지 명확하게 확인합니다.
+        import traceback
+        return {
+            "status": "error", 
+            "message": "❌ 데이터베이스 연결 실패",
+            "error_type": str(type(e)),
+            "error_details": str(e),
+            "traceback": traceback.format_exc()
+        }
 
 # --- 라우터 등록 ---
 app.include_router(admin.router)

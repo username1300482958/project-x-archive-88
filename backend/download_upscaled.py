@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from .auth_jwt_utils import get_current_user
+from .auth_jwt_utils import get_current_user, get_user_with_plan
 from .database import get_db
 from .models import User, Logo
 from .upscale_utils import upscale_image_with_replicate
@@ -13,17 +13,9 @@ def download_highres_logo(
     user_id: str,
     logo_id: int,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user_obj: User = Depends(get_user_with_plan)
 ):
-    # ✅ 권한 확인
-    if user["sub"] != user_id:
-        raise HTTPException(status_code=403, detail="권한이 없습니다.")
-
-    # ✅ 유저 및 요금제 확인
-    user_obj = db.query(User).filter(User.id == user_id).first()
-    if not user_obj:
-        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
-
+    # DB를 또 조회할 필요 없이, 전문가가 준 결과(user_obj)를 바로 사용합니다.
     allowed_plans = {"PRO", "ENTERPRISE"}
     plan = (user_obj.plan or "FREE").upper()
     if plan not in allowed_plans:

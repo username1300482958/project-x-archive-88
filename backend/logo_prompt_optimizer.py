@@ -36,7 +36,7 @@ def generate_prompt_with_gpt(
     style_description = ""
     if style_key in STYLE_DICTIONARY:
         style_description = f"The required visual style is '{style_key}', which should be interpreted as: {STYLE_DICTIONARY[style_key]}."
-        
+
     background_instruction = f"solid {background} background" # 기본값
     if background.lower() == 'white':
         background_instruction = "a solid pure white background (#FFFFFF)"
@@ -98,35 +98,3 @@ Your task is a strict, step-by-step process:
     except Exception as e:
         print(f"❌ GPT-4 프롬프트 생성 중 오류 발생: {e}")
         return f"2D vector logo for '{brand_name}', {style_detail} style, on a {background} background."
-
-# (이하 DALL-E 3 호출 및 generate_logo 함수는 이전과 동일)
-def call_dalle3_api(prompt: str, size: str = "1024x1024", quality: str = "standard") -> str:
-    try:
-        response = client.images.generate(
-            model="dall-e-3", prompt=prompt, size=size, quality=quality, n=1,
-        )
-        return response.data[0].url
-    except Exception as e:
-        print(f"❌ DALL-E 3 이미지 생성 중 오류 발생: {e}")
-        raise
-
-def generate_logo(
-    brand_name: str,
-    logo_style: str,
-    colors: List[str],
-    background: str,
-    style_detail: Optional[str] = None,
-    core_object: Optional[str] = None,
-    font_style: Optional[str] = None
-) -> str:
-    final_prompt = generate_prompt_with_gpt(
-        brand_name=brand_name,
-        logo_style=logo_style,
-        style_detail=style_detail,
-        core_object=core_object,
-        font_style=font_style,
-        colors=colors,
-        background=background,
-    )
-    image_url = call_dalle3_api(final_prompt)
-    return image_url

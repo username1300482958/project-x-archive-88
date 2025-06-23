@@ -39,8 +39,7 @@ from .s3_utils import upload_to_s3, generate_presigned_url_from_s3_url, delete_f
 from .s3_cleanup import clean_expired_s3_logos
 from .openai_utils import generate_logo_image
 from .logo_prompt_optimizer import generate_prompt_with_gpt
-from .auth_jwt_utils import verify_token
-from .auth_jwt_utils import get_current_user
+from .auth_jwt_utils import get_current_user, get_user_with_plan, verify_token
 from .config import BASE_BACKEND_URL
 
 # 라우터 import
@@ -573,37 +572,14 @@ def delete_logos(
 
 @app.get("/user/{user_id}")
 def get_user_plan(
-    user_id: str, 
-    db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user) 
+    user_with_plan: models.User = Depends(get_user_with_plan) # 의존성 주입!
 ):
-    if not user_id or user_id == "undefined":
-        print("❗ 경고: 잘못된 user_id로 /user/{user_id} 호출됨 → user_id =", user_id)
-        traceback.print_stack()
-
-    # 👇 여기에 본인의 구글 ID (sub)를 문자열로 입력하세요.
-    # 예: "10293847561234567890"
-    YOUR_DEVELOPER_USER_ID = "104120949912979219868"
-
-    # is_admin 체크와 함께, 본인 ID일 경우도 강제로 ENTERPRISE를 반환하도록 수정
-    if (current_user.get("is_admin") and current_user.get("sub") == user_id) or (user_id == YOUR_DEVELOPER_USER_ID):
-        print(f"🟢 개발자({YOUR_DEVELOPER_USER_ID}) 또는 관리자 계정: ENTERPRISE 플랜 정보 반환")
-        return {
-            "id": user_id,
-            "plan": "ENTERPRISE",
-            **PLAN_CONFIG["ENTERPRISE"]
-        }
-    
-    # --- 아래는 일반 사용자를 위한 기존 로직 (그대로 유지) ---
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    plan = (user.plan or "FREE").upper()
+    # 모든 복잡한 로직이 사라지고, 전문가가 준 결과만 사용하면 됩니다.
+    plan = (user_with_plan.plan or "FREE").upper()
     limits = PLAN_CONFIG.get(plan, PLAN_CONFIG["FREE"])
 
     return {
-        "id": user.id,
+        "id": user_with_plan.id,
         "plan": plan,
         **limits
     }

@@ -6,8 +6,9 @@ from typing import Optional
 from fastapi import Header
 from fastapi.security import OAuth2PasswordBearer
 from starlette.status import HTTP_401_UNAUTHORIZED
-from .database import SessionLocal
+from .database import SessionLocal, get_db
 from .models import User
+from sqlalchemy.orm import Session
 
 # ✅ 관리자 이메일 리스트
 ADMIN_EMAILS = ["alohad0han@gmail.com"]  # 👉 여기에 네 이메일 넣어
@@ -84,3 +85,47 @@ def get_user_id_from_token(token: str) -> str:
         return payload.get("sub", "")
     except jwt.PyJWTError:
         return ""
+    
+# ===================================================================
+# 👇 [추가] 모든 API를 위한 '요금제 확인 전문가' 의존성 함수
+# ===================================================================
+
+# 👉 여기에 본인의 구글 ID (sub)를 문자열로 입력하세요.
+# 예: YOUR_DEVELOPER_USER_ID = "10293847561234567890"
+YOUR_DEVELOPER_USER_ID = "104120949912979219868"
+
+def get_user_with_plan(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> User:
+    """
+    모든 API에서 일관된 방식으로 사용자 객체와 요금제를 가져오는 의존성 함수.
+    관리자/개발자 계정일 경우, DB 정보 대신 ENTERPRISE 플랜을 적용한 가상 객체를 반환.
+    """
+    # 권한 확인: 요청된 user_id가 토큰의 주인과 일치하는지 확인
+    # (단, 관리자는 모든 사용자의 정보를 볼 수 있도록 허용 - 이 부분은 필요에 따라 조정)
+    if not current_user.get("is_admin") and current_user.get("sub") != user_id:
+        raise HTTPException(status_code=403, detail="요청 권한이 없습니다.")
+    
+    # 관리자 또는 개발자 계정인지 확인
+    is_admin = current_user.get("is_admin")
+    is_developer = (user_id == YOUR_DEVELOPER_USER_ID)
+
+    if is_admin or is_developer:
+        print(f"🟢 'get_user_with_plan': 개발자({YOUR_DEVELOPER_USER_ID}) 또는 관리자 계정 확인. 가상 ENTERPRISE 유저 반환")
+        # DB를 조회하지 않고, 'ENTERPRISE' 플랜을 가진 가상 User 객체를 만들어 반환
+        virtual_user = User(
+            id=user_id,
+            plan="ENTERPRISE",
+            username=current_user.get("username", "admin_user"),
+            email=current_user.get("email", "admin@example.com"),
+        )
+        return virtual_user
+    
+    # 일반 사용자의 경우, 데이터베이스에서 조회
+    user_obj = db.query(User).filter(User.id == user_id).first()
+    if not user_obj:
+        raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+    
+    return user_obj

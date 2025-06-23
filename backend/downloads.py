@@ -59,26 +59,38 @@ def get_download_count(
 
     return {"used": used, "allowed": allowed, "plan": plan.upper()}
 
-# 수정 후 코드
-@router.get("/download/{user_id}/{logo_id}") # '/original' 삭제
-def download_logo(  # 함수 이름 변경
+@router.get("/download/{user_id}/{logo_id}")
+def download_logo(
     user_id: str,
     logo_id: int,
     db: Session = Depends(get_db),
     user_obj: User = Depends(get_user_with_plan)
-):  
-    # DB를 또 조회할 필요 없이, 전문가가 준 결과(user_obj)를 바로 사용합니다.
+):
     plan = (user_obj.plan or "FREE").upper()
-    if plan == "FREE":
-        raise HTTPException(status_code=403, detail="FREE 요금제에서는 다운로드할 수 없습니다.")
+
+    # 👇 다운로드 횟수 제한을 확인하는 로직 추가
+    plan_limit_map = {
+        "FREE": 0, "STARTER": 3, "BASIC": 3, "PRO": 10, "ENTERPRISE": 20
+    }
+    allowed = plan_limit_map.get(plan, 0)
+    used = db.query(Download).filter(Download.user_id == user_id).count()
+
+    if used >= allowed:
+        raise HTTPException(
+            status_code=403,
+            detail=f"{plan} 플랜에서는 최대 {allowed}개의 로고만 다운로드할 수 있습니다."
+        )
+    # 👆 여기까지가 추가된 부분
 
     logo = db.query(Logo).filter(Logo.id == logo_id, Logo.user_id == user_id).first()
-    # 👇 s3_url_original 대신 일반 s3_url을 사용해야 할 수 있습니다. 로고 모델 정의에 따라 맞춰주세요.
-    if not logo or not getattr(logo, "s3_url", None): 
+    if not logo or not getattr(logo, "s3_url", None):
         raise HTTPException(status_code=404, detail="로고 URL이 없습니다.")
 
+    # 다운로드 기록 저장
+    new_download = Download(user_id=user_id, logo_id=logo_id)
+    db.add(new_download)
+    db.commit()
+
     from backend.s3_utils import generate_presigned_url_from_s3_url
-    
-    # 👇 반환하는 URL 키 이름과 사용하는 로고 URL 속성을 프론트와 일치시킵니다.
-    presigned_url = generate_presigned_url_from_s3_url(logo.s3_url) 
-    return {"logo_url": presigned_url} # 'original_url' -> 'logo_url'
+    presigned_url = generate_presigned_url_from_s3_url(logo.s3_url)
+    return {"logo_url": presigned_url}

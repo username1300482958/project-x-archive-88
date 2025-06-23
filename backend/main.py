@@ -472,49 +472,6 @@ def get_user_logo_history(
         ]
     }
 
-@app.get("/download/{user_id}/{logo_id}")
-def download_logo(
-    user_id: str,
-    logo_id: int,
-    db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
-):
-    # 🔒 권한검사
-    if user_id != user["sub"]:
-        raise HTTPException(status_code=403, detail="권한이 없습니다.")
-
-    # ✅ 사용자 요금제 확인
-    user_obj = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user_obj:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    plan = (user_obj.plan or "FREE").upper()
-    limits = PLAN_CONFIG.get(plan, PLAN_CONFIG["FREE"])
-
-    # ✅ 현재까지 다운로드한 개수 확인
-    download_count = db.query(models.Download).filter(models.Download.user_id == user_id).count()
-    if download_count >= limits["max_download"]:
-        raise HTTPException(
-            status_code=403,
-            detail=f"{plan} 플랜에서는 최대 {limits['max_download']}개의 로고만 다운로드할 수 있습니다."
-        )
-
-    # ✅ 로고 조회 및 다운로드 기록 저장
-    logo = db.query(models.Logo).filter(models.Logo.id == logo_id).first()
-    if not logo:
-        raise HTTPException(status_code=404, detail="Logo not found")
-
-    new_download = models.Download(user_id=user_id, logo_id=logo_id)
-    db.add(new_download)
-    db.commit()
-
-    # ✅ 이제 이 코드는 config.py에서 가져온 BASE_BACKEND_URL을 사용하므로 오류가 나지 않습니다.
-    logo_url = logo.s3_url if logo.s3_url else f"{BASE_BACKEND_URL}/logos/{user_id}"
-    return {
-        "message": "다운로드 기록 저장됨",
-        "logo_url": logo_url
-    }
-
 @app.post("/users/")
 def create_user(username: str, email: str, db: Session = Depends(get_db)):
     user = models.User(username=username, email=email)

@@ -36,6 +36,12 @@ def generate_prompt_with_gpt(
     style_description = ""
     if style_key in STYLE_DICTIONARY:
         style_description = f"The required visual style is '{style_key}', which should be interpreted as: {STYLE_DICTIONARY[style_key]}."
+        
+    background_instruction = f"solid {background} background" # 기본값
+    if background.lower() == 'white':
+        background_instruction = "a solid pure white background (#FFFFFF)"
+    elif background.lower() == 'black':
+        background_instruction = "a solid pure black background (#000000)"
 
     # 시스템 메시지는 이전과 동일하게 강력한 역할을 부여
     system_msg = {
@@ -70,8 +76,8 @@ Your task is a strict, step-by-step process:
         prompt_lines.append(f"- Font Style: '{font_style}'")
     if colors:
         prompt_lines.append(f"- Requested Colors: {colors_str}")
-    if background:
-        prompt_lines.append(f"- Background Color: {background}")
+    if background_instruction:
+        prompt_lines.append(f"- Background: {background_instruction}")
 
     user_request = "\n".join(prompt_lines)
 

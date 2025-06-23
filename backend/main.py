@@ -575,16 +575,19 @@ def delete_logos(
 def get_user_plan(
     user_id: str, 
     db: Session = Depends(get_db),
-    # ✅ 1. 현재 로그인한 사용자의 정보를 가져오도록 의존성 추가
     current_user: dict = Depends(get_current_user) 
 ):
     if not user_id or user_id == "undefined":
         print("❗ 경고: 잘못된 user_id로 /user/{user_id} 호출됨 → user_id =", user_id)
         traceback.print_stack()
 
-    # ✅ 2. 요청한 user_id가 현재 로그인한 관리자 본인인지 확인
-    if current_user.get("is_admin") and current_user.get("sub") == user_id:
-        print("🟢 관리자 계정: ENTERPRISE 플랜 정보 반환")
+    # 👇 여기에 본인의 구글 ID (sub)를 문자열로 입력하세요.
+    # 예: "10293847561234567890"
+    YOUR_DEVELOPER_USER_ID = "104120949912979219868"
+
+    # is_admin 체크와 함께, 본인 ID일 경우도 강제로 ENTERPRISE를 반환하도록 수정
+    if (current_user.get("is_admin") and current_user.get("sub") == user_id) or (user_id == YOUR_DEVELOPER_USER_ID):
+        print(f"🟢 개발자({YOUR_DEVELOPER_USER_ID}) 또는 관리자 계정: ENTERPRISE 플랜 정보 반환")
         return {
             "id": user_id,
             "plan": "ENTERPRISE",

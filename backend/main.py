@@ -9,7 +9,7 @@ import re
 import traceback
 import inspect
 from email.mime.text import MIMEText
-from email.header import Header
+from email.header import Header as EmailHeader
 from datetime import datetime, timedelta
 from typing import List, Optional, Union
 
@@ -173,7 +173,7 @@ def send_contact_message(form: ContactForm):
     body = f"이름: {form.name}\n이메일: {form.email}\n\n문의내용:\n{form.message}"
 
     msg = MIMEText(body, _charset="utf-8")
-    msg["Subject"] = Header(subject, "utf-8")
+    msg["Subject"] = EmailHeader(subject, "utf-8")
     msg["From"] = os.getenv("EMAIL_USER")
     msg["To"] = os.getenv("TO_EMAIL")
 

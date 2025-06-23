@@ -572,11 +572,26 @@ def delete_logos(
     return {"message": f"{len(logos_to_delete)}개의 로고가 성공적으로 삭제되었습니다."}
 
 @app.get("/user/{user_id}")
-def get_user_plan(user_id: str, db: Session = Depends(get_db)):
+def get_user_plan(
+    user_id: str, 
+    db: Session = Depends(get_db),
+    # ✅ 1. 현재 로그인한 사용자의 정보를 가져오도록 의존성 추가
+    current_user: dict = Depends(get_current_user) 
+):
     if not user_id or user_id == "undefined":
         print("❗ 경고: 잘못된 user_id로 /user/{user_id} 호출됨 → user_id =", user_id)
         traceback.print_stack()
 
+    # ✅ 2. 요청한 user_id가 현재 로그인한 관리자 본인인지 확인
+    if current_user.get("is_admin") and current_user.get("sub") == user_id:
+        print("🟢 관리자 계정: ENTERPRISE 플랜 정보 반환")
+        return {
+            "id": user_id,
+            "plan": "ENTERPRISE",
+            **PLAN_CONFIG["ENTERPRISE"]
+        }
+    
+    # --- 아래는 일반 사용자를 위한 기존 로직 (그대로 유지) ---
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -585,7 +600,7 @@ def get_user_plan(user_id: str, db: Session = Depends(get_db)):
     limits = PLAN_CONFIG.get(plan, PLAN_CONFIG["FREE"])
 
     return {
-        "id": user.id,  # ✅ 이거 꼭 추가
+        "id": user.id,
         "plan": plan,
         **limits
     }

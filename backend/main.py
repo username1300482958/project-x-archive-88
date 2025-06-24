@@ -557,7 +557,7 @@ def test_db_connection(db: Session = Depends(get_db)):
         import traceback
         return {
             "status": "error", 
-            "message": "❌ 데이터베이스 연결 실패",
+            "message": "❌ 데이터베이스 연결 실패",#재배포용 주석
             "error_type": str(type(e)),
             "error_details": str(e),
             "traceback": traceback.format_exc()

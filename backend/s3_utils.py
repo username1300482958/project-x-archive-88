@@ -37,18 +37,26 @@ def delete_from_s3(s3_url):
     except Exception as e:
         print(f"⚠️ S3 삭제 오류: {e}")
 
-def generate_presigned_url_from_s3_url(s3_url, expiration=3600):
+def generate_presigned_url_from_s3_url(s3_url, expiration=3600, download_name=None):
     """
-    저장된 s3_url (예: https://버킷명.s3.리전.amazonaws.com/객체키)
-    를 파싱해서 Presigned URL을 생성하여 반환합니다.
+    저장된 s3_url을 파싱해서 Presigned URL을 생성하여 반환합니다.
+    [수정] download_name 파라미터를 추가하여 파일 다운로드를 강제할 수 있습니다.
     """
     prefix = f"https://{AWS_S3_BUCKET_NAME}.s3.{AWS_S3_REGION}.amazonaws.com/"
     if s3_url.startswith(prefix):
         object_key = s3_url[len(prefix):]
+        
+        # 👇 이 부분이 핵심입니다.
+        params = {'Bucket': AWS_S3_BUCKET_NAME, 'Key': object_key}
+        if download_name:
+            # download_name이 제공되면, 브라우저에게 다운로드하라는 신호를 보냅니다.
+            params['ResponseContentDisposition'] = f'attachment; filename="{download_name}"'
+        # 👆 여기까지가 수정된 부분입니다.
+
         try:
             url = s3_client.generate_presigned_url(
                 'get_object',
-                Params={'Bucket': AWS_S3_BUCKET_NAME, 'Key': object_key},
+                Params=params, # 수정된 params 사용
                 ExpiresIn=expiration
             )
             return url

@@ -85,6 +85,11 @@ def download_logo(
     logo = db.query(Logo).filter(Logo.id == logo_id, Logo.user_id == user_id).first()
     if not logo or not getattr(logo, "s3_url", None):
         raise HTTPException(status_code=404, detail="로고 URL이 없습니다.")
+    
+    # 👇 원본 URL(s3_url_original)을 우선적으로 사용하도록 변경합니다.
+    download_target_url = logo.s3_url_original if logo.s3_url_original else logo.s3_url
+    if not download_target_url:
+        raise HTTPException(status_code=404, detail="로고 URL이 없습니다.")
 
     # 다운로드 기록 저장
     new_download = Download(user_id=user_id, logo_id=logo_id)
@@ -92,5 +97,9 @@ def download_logo(
     db.commit()
 
     from backend.s3_utils import generate_presigned_url_from_s3_url
-    presigned_url = generate_presigned_url_from_s3_url(logo.s3_url)
+    # 👇 s3_utils에 만든 download_name 파라미터를 사용하여 파일명을 지정해줍니다.
+    presigned_url = generate_presigned_url_from_s3_url(
+        download_target_url, 
+        download_name=f"{logo.brand_name}_logo.png"
+    )
     return {"logo_url": presigned_url}

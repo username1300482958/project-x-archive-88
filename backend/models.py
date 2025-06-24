@@ -34,6 +34,7 @@ class Logo(Base):
     logo_path = Column(String(500), nullable=False)
     # 추가된 컬럼들:
     s3_url = Column(String(500), nullable=False, default="")
+    s3_url_original = Column(String(500), nullable=True) # 원본 버전 URL
     brand_name = Column(String(255), nullable=False)
     logo_style = Column(String(100), nullable=False)
     colors = Column(String(255), nullable=False)

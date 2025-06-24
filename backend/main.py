@@ -348,8 +348,9 @@ async def generate_logo(
 
         db_logo = models.Logo(
             user_id=request.user_id,
-            logo_path=logo_path,
-            s3_url=s3_url if s3_url else "",
+            logo_path=paid_logo_path,  # 👈 [수정 1] 원본 로컬 경로로 저장
+            s3_url=s3_url if s3_url else "", # 워터마크 버전 S3 URL
+            s3_url_original=s3_url_original if s3_url_original else "", # 👈 [수정 2] 원본 S3 URL 추가
             brand_name=request.brand_name,
             logo_style=request.logo_style,
             colors=",".join(request.colors)

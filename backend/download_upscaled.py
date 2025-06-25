@@ -4,6 +4,7 @@ from .auth_jwt_utils import get_current_user, get_user_with_plan
 from .database import get_db
 from .models import User, Logo
 from .upscale_utils import upscale_image_with_replicate
+from .s3_utils import generate_presigned_url_from_s3_url
 import os
 
 router = APIRouter()
@@ -28,12 +29,15 @@ def download_highres_logo(
 
     # 👇 로컬 파일을 찾는 모든 로직을 삭제합니다.
     original_s3_url = logo.s3_url_original
+
+    # 👇 [추가] Replicate가 접근할 수 있도록, 원본 S3 URL에 대한 임시 공개 주소(Presigned URL)를 먼저 생성합니다.
+    # 이 임시 주소는 짧은 시간(예: 5분)만 유효합니다.
+    accessible_url = generate_presigned_url_from_s3_url(original_s3_url, expiration=300)
     
     try:
-        # 👇 이제 s3_url_original을 직접 전달하여 업스케일링을 수행합니다.
-        presigned_url = upscale_image_with_replicate(original_s3_url, scale=2)
+        # 👇 이제 Replicate에게는 이 임시 공개 주소를 전달합니다.
+        presigned_url = upscale_image_with_replicate(accessible_url, scale=2)
     except Exception as e:
-        # Replicate에서 오는 에러를 좀 더 구체적으로 보여주도록 수정
         error_detail = str(e)
         print(f"❌ 업스케일링 실패: {error_detail}")
         raise HTTPException(status_code=500, detail=f"업스케일링 실패: {error_detail}")

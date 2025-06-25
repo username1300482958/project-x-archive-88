@@ -13,18 +13,18 @@ if not REPLICATE_API_TOKEN:
 # 2) Replicate 클라이언트 초기화
 replicate_client = replicate.Client(api_token=REPLICATE_API_TOKEN)
 
-# 👇 함수가 이제 local_image_path 대신 image_url을 받도록 변경합니다.
-def upscale_image_with_replicate(image_url: str, scale: int = 2) -> str:
+# 👇 함수가 이제 image_url 대신 image_file_object를 받도록 변경합니다.
+def upscale_image_with_replicate(image_file_object, scale: int = 2) -> str:
     """
-    [수정됨] 이미지 URL을 Replicate Real-ESRGAN 모델로 업스케일링
+    [최종 수정됨] 파일 객체를 직접 받아 Replicate Real-ESRGAN 모델로 업스케일링
     """
-    print(f"🚀 Replicate에 업스케일링 요청 시작 (URL: {image_url})...")
+    print(f"🚀 Replicate에 업스케일링 요청 시작 (파일 데이터 직접 전달)...")
     
-    # 👇 이제 로컬 파일을 열 필요 없이, URL을 바로 input으로 전달합니다.
+    # 👇 이제 URL이 아닌, 전달받은 파일 객체를 바로 input으로 사용합니다.
     result = replicate_client.run(
         "nightmareai/real-esrgan:f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa",
         input={
-            "image": image_url,
+            "image": image_file_object,
             "scale": scale
         }
     )

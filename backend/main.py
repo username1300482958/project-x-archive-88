@@ -542,6 +542,26 @@ def get_user_plan(
         **limits
     }
 
+@app.get("/generation/count/{user_id}", tags=["Counts"])
+def get_generation_count(
+    user_id: str,
+    db: Session = Depends(get_db),
+    user_obj: models.User = Depends(get_user_with_plan)
+):
+    """
+    사용자의 현재 로고 생성 횟수와 플랜별 최대 생성 가능 횟수를 반환합니다.
+    """
+    plan = (user_obj.plan or "FREE").upper()
+    
+    # PLAN_CONFIG에서 해당 플랜의 최대 생성 한도를 가져옵니다.
+    # .get("max_total", 0)을 사용하여 안전하게 값을 가져옵니다.
+    allowed = PLAN_CONFIG.get(plan, PLAN_CONFIG["FREE"]).get("max_total", 0)
+
+    # 현재까지 생성한 로고의 총 개수를 계산합니다.
+    used = db.query(models.Logo).filter(models.Logo.user_id == user_id).count()
+
+    return {"used": used, "allowed": allowed, "plan": plan}
+
 @app.get("/test-db-connection", tags=["테스트"])
 def test_db_connection(db: Session = Depends(get_db)):
     """

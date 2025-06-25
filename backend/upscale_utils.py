@@ -29,7 +29,7 @@ def upscale_image_with_replicate(local_image_path: str, scale: int = 2) -> str:
     # 3) Replicate API 호출
     with open(local_image_path, "rb") as img:
         result = replicate_client.run(
-            "cjwbw/real-esrgan:1e44987c49e7e27d6a6e309f7183c8b138b2bcd63c24900f417f52d6836b6d73",
+            "replicate/real-esrgan:42fed1c4974146d4d2414e2be2c5236e7a8c9053", # 👈 이 새로운 주소로 교체합니다.
             input={ "image": img, "scale": scale, "face_enhance": False },
         )
 

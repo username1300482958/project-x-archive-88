@@ -580,11 +580,11 @@ app.include_router(payment_router)
 async def get_google_client_id():
     return {"client_id": os.getenv("GOOGLE_CLIENT_ID")}
 
-# # --- 예약 작업 ---
-# @app.on_event("startup")
-# @repeat_every(seconds=86400) # 24시간마다 자동 실행
-# def schedule_s3_cleanup():
-#     clean_expired_s3_logos()
+# --- 예약 작업 ---
+@app.on_event("startup")
+@repeat_every(seconds=86400) # 24시간마다 자동 실행
+def schedule_s3_cleanup():
+    clean_expired_s3_logos()
 
 # --- 메인 실행 ---
 if __name__ == "__main__":

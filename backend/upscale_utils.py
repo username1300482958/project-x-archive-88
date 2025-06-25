@@ -13,33 +13,23 @@ if not REPLICATE_API_TOKEN:
 # 2) Replicate 클라이언트 초기화
 replicate_client = replicate.Client(api_token=REPLICATE_API_TOKEN)
 
-def upscale_image_with_replicate(local_image_path: str, scale: int = 2) -> str:
+# 👇 함수가 이제 local_image_path 대신 image_url을 받도록 변경합니다.
+def upscale_image_with_replicate(image_url: str, scale: int = 2) -> str:
     """
-    1) 로컬 이미지 파일을 Replicate Real-ESRGAN 모델로 업스케일링
-    2) 업스케일된 이미지를 임시로 다운로드
-    3) S3에 업로드 후 presigned URL 반환
-
-    Returns:
-        presigned_url (str)
+    [수정됨] 이미지 URL을 Replicate Real-ESRGAN 모델로 업스케일링
     """
-    # 파일 존재 여부
-    if not os.path.exists(local_image_path):
-        raise FileNotFoundError(f"이미지 파일을 찾을 수 없습니다: {local_image_path}")
+    print(f"🚀 Replicate에 업스케일링 요청 시작 (URL: {image_url})...")
+    
+    # 👇 이제 로컬 파일을 열 필요 없이, URL을 바로 input으로 전달합니다.
+    result = replicate_client.run(
+        "nightmareai/real-esrgan:42fed1c4974146d4d2414e2be2c5236e7a8c9053",
+        input={
+            "image": image_url,
+            "scale": scale
+        }
+    )
+    print("✅ Replicate 작업 완료, 결과 URL 수신")
 
-    # Replicate API 호출 부분을 아래와 같이 수정합니다.
-    with open(local_image_path, "rb") as img:
-        print("🚀 Replicate에 업스케일링 요청 시작...")
-        result = replicate_client.run(
-            # 👇 [수정 1] Replicate 웹사이트에서 찾은 '정답' 모델 주소로 교체
-            "nightmareai/real-esrgan:42fed1c4974146d4d2414e2be2c5236e7a8c9053", 
-            
-            # 👇 [수정 2] face_enhance 파라미터 제거
-            input={
-                "image": img,
-                "scale": scale
-            }
-        )
-        print("✅ Replicate 작업 완료, 결과 URL 수신")
 
     # 결과에서 URL 추출
     output_url = result[0] if isinstance(result, list) else result
@@ -66,8 +56,12 @@ def upscale_image_with_replicate(local_image_path: str, scale: int = 2) -> str:
     if not s3_url:
         raise RuntimeError("❌ S3 업로드에 실패했습니다.")
 
-    # 7) presigned URL 생성
-    presigned = generate_presigned_url_from_s3_url(s3_url)
+    # 7) presigned URL 생성 (다운로드 강제 옵션 추가)
+    # 👇 tmp_filename 변수를 사용하여 다운로드 파일명을 지정해줍니다.
+    presigned = generate_presigned_url_from_s3_url(
+        s3_url,
+        download_name=tmp_filename
+    )
     if not presigned:
         # fallback: 공개 S3 URL 반환
         presigned = s3_url

@@ -22,7 +22,7 @@ def upscale_image_with_replicate(image_url: str, scale: int = 2) -> str:
     
     # 👇 이제 로컬 파일을 열 필요 없이, URL을 바로 input으로 전달합니다.
     result = replicate_client.run(
-        "nightmareai/real-esrgan:42fed1c4974146d4d2414e2be2c5236e7a8c9053",
+        "nightmareai/real-esrgan:f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa",
         input={
             "image": image_url,
             "scale": scale

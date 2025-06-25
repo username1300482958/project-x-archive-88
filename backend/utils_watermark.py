@@ -1,37 +1,67 @@
 from PIL import Image, ImageDraw, ImageFont
+import numpy as np # 숫자 계산을 위해 numpy 라이브러리가 필요합니다.
+
+def get_avg_brightness(img: Image.Image) -> float:
+    """이미지의 평균 밝기를 계산하는 헬퍼 함수 (0-255)"""
+    # 이미지를 흑백(Luminance)으로 변환 후, numpy 배열로 만들어 평균을 계산합니다.
+    im_grey = img.convert('L')
+    return np.array(im_grey).mean()
 
 def apply_rotated_watermark(
     img: Image.Image,
-    text="BRANDIEAI",
-    font_path="backend/assets/fonts/Aldrich-Regular.ttf"
+    text: str = "© brandieai.com", # 👈 [수정] 저작권 표시로 변경
+    font_path: str = "backend/assets/fonts/Aldrich-Regular.ttf"
 ) -> Image.Image:
-    width, height = img.size
-    font_size = int(min(width, height) * 0.05)
-    font = ImageFont.truetype(font_path, font_size)
+    
+    # 1. 지능적인 색상 선택
+    avg_brightness = get_avg_brightness(img)
+    if avg_brightness > 128: # 배경이 밝으면
+        watermark_color = (0, 0, 0, 30) # 은은한 검은색 (R, G, B, Alpha)
+    else: # 배경이 어두우면
+        watermark_color = (255, 255, 255, 25) # 은은한 흰색
 
-    # 대각선 기준 더 넉넉한 워터마크 레이어 생성
+    width, height = img.size
+    
+    # 2. 폰트 크기 및 간격 미세 조정
+    font_size = int(min(width, height) * 0.045) # 기존 0.05에서 약간 줄임
+    try:
+        font = ImageFont.truetype(font_path, font_size)
+    except IOError:
+        print(f"⚠️ 폰트 파일을 찾을 수 없습니다: {font_path}. 기본 폰트를 사용합니다.")
+        font = ImageFont.load_default()
+
     diagonal = int((width**2 + height**2) ** 0.5)
-    extended_size = diagonal * 2  # 넉넉히 확보
-    watermark_layer = Image.new("RGBA", (extended_size, extended_size), (0, 0, 0, 0))
+    watermark_layer = Image.new("RGBA", (diagonal * 2, diagonal * 2), (0, 0, 0, 0))
     draw = ImageDraw.Draw(watermark_layer)
 
-    # 글자 간격 증가 (겹침 방지)
-    step_x = int(font_size * 6)
-    step_y = int(font_size * 6)
+    # 텍스트의 실제 렌더링 크기를 계산합니다.
+    try:
+        # Pillow 10.0.0 이상
+        text_bbox = draw.textbbox((0, 0), text, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        text_height = text_bbox[3] - text_bbox[1]
+    except AttributeError:
+        # 이전 버전 Pillow
+        text_width, text_height = draw.textsize(text, font=font)
 
-    for y in range(0, extended_size, step_y):
-        for x in range(0, extended_size, step_x):
-            draw.text((x, y), text, font=font, fill=(255, 0, 0, 40))  # 투명도 40
+    # 3. 간격을 더 넓혀 세련미 추가
+    step_x = int(text_width * 1.8)
+    step_y = int(text_height * 7) # 세로 간격을 더 넓힘
 
-    # 회전 (확장 없이 그대로)
-    rotated = watermark_layer.rotate(45, expand=False)
+    # 타일링
+    for y in range(0, diagonal * 2, step_y):
+        for x in range(0, diagonal * 2, step_x):
+            draw.text((x, y), text, font=font, fill=watermark_color)
 
-    # 중심 기준 crop
-    left = (extended_size - width) // 2
-    top = (extended_size - height) // 2
+    # 회전 및 자르기
+    rotated = watermark_layer.rotate(30, expand=False, resample=Image.BICUBIC)
+    
+    left = (rotated.width - width) // 2
+    top = (rotated.height - height) // 2
     cropped = rotated.crop((left, top, left + width, top + height))
 
-    # 이미지에 합성
+    # 원본 이미지에 합성
     img_rgba = img.convert("RGBA")
-    final = Image.alpha_composite(img_rgba, cropped)
-    return final.convert("RGB")
+    final_image = Image.alpha_composite(img_rgba, cropped)
+    
+    return final_image.convert("RGB")

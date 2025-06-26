@@ -1,13 +1,13 @@
 # backend/tasks.py
 
 # --- 필요한 모든 '부품'과 '도구'들을 가져옵니다 ---
-from celery_worker import celery_app
-from utils_watermark import apply_watermark_optimized
-from upscale_utils import upscale_image_with_replicate # 기존 upscale 함수
-from s3_utils import s3_client, AWS_S3_BUCKET_NAME # 기존 S3 클라이언트 정보
+from .celery_worker import celery_app
+from .utils_watermark import apply_watermark_optimized
+from .upscale_utils import upscale_image_with_replicate # 기존 upscale 함수
+from .s3_utils import s3_client, AWS_S3_BUCKET_NAME # 기존 S3 클라이언트 정보
 # TODO: 최종 이미지를 S3에 올리는 함수를 s3_utils.py에서 가져와야 합니다.
 # from s3_utils import upload_final_image_to_s3 
-from database import get_db
+from .database import get_db
 # TODO: DB 상태를 업데이트하는 함수를 만들어 가져와야 합니다.
 # from crud import update_logo_status 
 

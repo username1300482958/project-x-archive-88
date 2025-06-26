@@ -67,37 +67,40 @@ def generate_presigned_url_from_s3_url(s3_url, expiration=3600, download_name=No
 
 def upload_to_s3(file_path, object_name, user_id=None):
     """
-    주어진 파일 경로의 파일을 AWS S3에 업로드하고,
-    업로드된 파일의 URL을 반환합니다.
-    업로드 중 오류가 발생하면 재시도 후, 최종 실패 시 log_error()를 호출하고 None을 반환합니다.
-    
-    :param file_path: 로컬 파일 경로
-    :param object_name: S3에 저장할 객체 이름
-    :param user_id: (선택) 오류 로그 기록을 위한 사용자 ID
-    :return: 업로드된 파일 URL 또는 실패 시 None
+    [최종 수정됨] 주어진 파일을 S3에 업로드하고, 업로드 성공 여부를 '검증'한 뒤 URL을 반환합니다.
     """
     max_retries = 3
     retry_delay = 2  # 초 단위 딜레이
     last_error = None
-    for attempt in range(1, max_retries + 1):
+
+    for attempt in range(max_retries):
         try:
-            s3_client.upload_file(file_path, AWS_S3_BUCKET_NAME, object_name,ExtraArgs={"ContentType": "image/png"})
+            # 1. 파일 업로드 시도
+            s3_client.upload_file(file_path, AWS_S3_BUCKET_NAME, object_name, ExtraArgs={"ContentType": "image/png"})
+            
+            # 👇 [핵심 수정] 업로드 후, 해당 파일이 정말 존재하는지 확인(Verify)합니다.
+            print(f"... S3 업로드 후 검증 시도: {object_name}")
+            s3_client.head_object(Bucket=AWS_S3_BUCKET_NAME, Key=object_name)
+            print("✅ S3 업로드 검증 성공!")
+
+            # 2. 검증까지 성공해야만 진짜 URL을 반환합니다.
             s3_url = f"https://{AWS_S3_BUCKET_NAME}.s3.{AWS_S3_REGION}.amazonaws.com/{object_name}"
             return s3_url
-        except NoCredentialsError:
-            print("⚠️ AWS 자격 증명이 설정되지 않았습니다.")
-            return None
+
         except Exception as e:
             last_error = e
-            logging.error(f"⚠️ S3 업로드 오류 (시도 {attempt}/{max_retries}): {e}", exc_info=True)
-            if attempt < max_retries:
+            logging.error(f"❌ S3 업로드/검증 실패 (시도 {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries -1:
                 time.sleep(retry_delay)
-    # 모든 시도 후 실패하면 log_error 호출 (user_id가 제공된 경우)
-    if last_error is not None and user_id:
-        log_error(
-            user_id=user_id,
-            context="S3 Upload",
-            message=f"S3 업로드 실패: {str(last_error)}",
-            stack_trace=str(last_error)
-        )
+            else:
+                # 최종 실패 시 에러 로그 기록
+                if user_id:
+                    log_error(
+                        user_id=user_id,
+                        context="S3 Upload",
+                        message=f"S3 업로드 최종 실패: {str(last_error)}",
+                        stack_trace=str(last_error)
+                    )
+    
+    # 3. 모든 시도가 실패하면 None을 반환합니다.
     return None

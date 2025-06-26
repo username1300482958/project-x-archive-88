@@ -45,8 +45,8 @@ def apply_rotated_watermark(
         text_width, text_height = draw.textsize(text, font=font)
 
     # 3. 간격을 더 넓혀 세련미 추가
-    step_x = int(text_width * 1.8)
-    step_y = int(text_height * 7) # 세로 간격을 더 넓힘
+    step_x = int(text_width * 1.2) # 가로 간격 줄임
+    step_y = int(text_height * 3) # 세로 간격 줄임
 
     # 타일링
     for y in range(0, diagonal * 2, step_y):

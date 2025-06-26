@@ -16,9 +16,9 @@ def apply_rotated_watermark(
     # 1. 지능적인 색상 선택
     avg_brightness = get_avg_brightness(img)
     if avg_brightness > 128: # 배경이 밝으면
-        watermark_color = (0, 0, 0, 80) # 검정색 투명도 증가
+        watermark_color = (0, 0, 0, 30) # 검정색 투명도 증가
     else: # 배경이 어두우면
-        watermark_color = (255, 255, 255, 70) # 흰색 투명도 증가
+        watermark_color = (255, 255, 255, 20) # 흰색 투명도 증가
 
     width, height = img.size
     

@@ -5,6 +5,7 @@ from .database import get_db
 from .models import User, Logo
 from .upscale_utils import upscale_image_with_replicate
 from .s3_utils import generate_presigned_url_from_s3_url, s3_client, AWS_S3_BUCKET_NAME
+from urllib.parse import urlparse
 import os
 import boto3
 import io
@@ -33,16 +34,17 @@ def download_highres_logo(
     original_s3_url = logo.s3_url_original
 
     try:
-        # 👇 [추가] S3에서 원본 파일을 메모리로 직접 다운로드합니다.
-        # s3_url_original에서 객체 키(파일 경로)를 파싱합니다.
-        object_key = original_s3_url.split(f"{AWS_S3_BUCKET_NAME}.s3.amazonaws.com/")[-1]
+        # 👇 [최종 수정] S3 URL을 안전하게 파싱하여 객체 키를 추출합니다.
+        parsed_url = urlparse(original_s3_url)
+        # URL 경로의 맨 앞 '/'를 제거하여 순수한 객체 키만 남깁니다.
+        object_key = parsed_url.path.lstrip('/')
         
-        # 메모리 내 버퍼(in-memory buffer) 생성
+        print(f"S3에서 다운로드할 객체 키: {object_key}") # 디버깅용 로그 추가
+
         in_mem_file = io.BytesIO()
         s3_client.download_fileobj(AWS_S3_BUCKET_NAME, object_key, in_mem_file)
-        in_mem_file.seek(0) # 버퍼의 커서를 처음으로 되돌립니다.
+        in_mem_file.seek(0)
 
-        # 👇 이제 파일 객체를 직접 전달하여 업스케일링을 수행합니다.
         presigned_url = upscale_image_with_replicate(in_mem_file, scale=2)
 
     except Exception as e:

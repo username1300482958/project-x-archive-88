@@ -54,7 +54,7 @@ def download_logo(
 
     # 👇 다운로드 횟수 제한을 확인하는 로직 추가
     plan_limit_map = {
-        "FREE": 0, "STARTER": 3, "BASIC": 3, "PRO": 10, "ENTERPRISE": 20
+        "FREE": 0, "STARTER": 3, "BASIC": 3, "PRO": 10, "ENTERPRISE": 99999
     }
     allowed = plan_limit_map.get(plan, 0)
     used = db.query(Download).filter(Download.user_id == user_id).count()

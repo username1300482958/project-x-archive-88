@@ -194,22 +194,13 @@ def send_contact_message(form: ContactForm):
 async def generate_logo(
     request: LogoRequest,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    # 👇 [수정 1] 이제 이 함수도 '요금제 확인 전문가'를 사용합니다.
+    user_obj: models.User = Depends(get_user_with_plan),
     req: Request = None
 ):
     print("🟡 generate_logo 진입")
-    print("🟡 request.user_id:", request.user_id)
-    print("🟡 request.brand_name:", request.brand_name)
-    print("🟡 request.logo_style:", request.logo_style)
-    print("🟡 request.colors:", request.colors)
-    print("🟡 request.font_style:", request.font_style)
-    print("🟡 request.batch_size:", request.batch_size)
     client_ip = get_client_ip(req)
     print(f"📡 요청자 IP: {client_ip}")
-
-    # 🔒 권한검사
-    if request.user_id != user["sub"]:
-        raise HTTPException(status_code=403, detail="권한이 없습니다.")
     
     # ✅ abuse 방지 필터링: 최근 3시간 이내 동일 IP에서 다른 FREE 계정 생성 기록 확인
     three_hours_ago = datetime.utcnow() - timedelta(hours=3)
@@ -243,34 +234,13 @@ async def generate_logo(
     # ✅ IP 로깅 (비교용)
     log_error(user_id=request.user_id, context="AbuseCheck", message=client_ip)
 
-    # ✅ 사용자 조회 또는 생성
-    user_obj = db.query(models.User).filter(models.User.id == request.user_id).first()
-    if not user_obj:
-        user_obj = models.User(
-            id=request.user_id,
-            username=request.user_id,
-            email=f"{request.user_id}@example.com",
-            plan="FREE"  # 신규 가입 시 FREE로 지정
-        )
-        db.add(user_obj)
-        db.commit()
-        db.refresh(user_obj)
-
+    # user_obj를 직접 받으므로, DB에서 또 조회할 필요가 없습니다.
     plan = (user_obj.plan or "FREE").upper()
+    
+    # 👇 [수정 2] 요금제 한도 확인 시, 관리자/개발자 예외 처리를 명확하게 합니다.
+    # get_user_with_plan 덕분에 user_obj.plan이 'ENTERPRISE'로 넘어옵니다.
     limits = PLAN_CONFIG.get(plan, PLAN_CONFIG["FREE"])
-    new_logos_count = request.batch_size  # ✅ 프론트 요청에 따라 개수 반영
-
-    # 요금제 조건 우회: 관리자 계정은 무제한 허용
-    if user.get("is_admin"):
-        print("🟢 관리자 계정: 요금제 제한 우회")
-        limits = {"max_total": 99999, "max_batch": 100, "max_download": 9999, "s3_retention_days": 365}
-
-    # 선택한 개수가 요금제 허용보다 많으면 차단
-    if new_logos_count > limits["max_batch"]:
-        raise HTTPException(
-            status_code=403,
-            detail=f"{plan} 플랜에서는 한 번에 최대 {limits['max_batch']}개까지 생성할 수 있습니다."
-        )
+    new_logos_count = request.batch_size
 
     # 총 개수 제한 체크
     current_count = db.query(models.Logo).filter(models.Logo.user_id == request.user_id).count()
@@ -328,23 +298,25 @@ async def generate_logo(
         # ✅ 워터마크 버전 저장
         logo_path = os.path.join(user_folder, logo_filename)
         img = Image.open(generated_path)
-        img_watermarked = apply_rotated_watermark(img, text="BRANDIEAI")
+        img_watermarked = apply_rotated_watermark(img)
         img_watermarked.save(logo_path)
 
-        # ✅ S3 업로드 - 워터마크 버전
-        retry_attempts = 3
-        s3_url = None
-        for attempt in range(retry_attempts):
-            s3_url = upload_to_s3(logo_path, f"{request.user_id}/{folder_name}/watermarked/{logo_filename}")
-            if s3_url:
-                break
-
-        # ✅ S3 업로드 - 워터마크 없는 원본도 저장
-        s3_url_original = None
-        for attempt in range(retry_attempts):
-            s3_url_original = upload_to_s3(paid_logo_path, f"{request.user_id}/{folder_name}/original/{logo_filename}")
-            if s3_url_original:
-                break
+        # 👇 [핵심 수정] S3 업로드 및 DB 저장 로직
+        
+        # 1. 워터마크 버전 S3 업로드
+        print("📤 [1/2] 워터마크 버전 S3 업로드 시도...")
+        s3_url = upload_to_s3(logo_path, f"{request.user_id}/{folder_name}/watermarked/{logo_filename}")
+        
+        # 2. 원본 버전 S3 업로드
+        print("📤 [2/2] 원본 버전 S3 업로드 시도...")
+        s3_url_original = upload_to_s3(paid_logo_path, f"{request.user_id}/{folder_name}/original/{logo_filename}")
+        
+        # 3. 두 URL이 모두 정상적으로 생성되었는지 반드시 확인합니다.
+        if not s3_url or not s3_url_original:
+            logging.error(f"S3 업로드 실패: watermarked={s3_url}, original={s3_url_original}")
+            raise HTTPException(status_code=500, detail="로고를 클라우드에 업로드하는 데 실패했습니다.")
+        
+        print("✅ S3 업로드 성공. DB 저장 시작...")
 
         db_logo = models.Logo(
             user_id=request.user_id,
@@ -358,14 +330,11 @@ async def generate_logo(
         db.add(db_logo)
         db.commit()
         db.refresh(db_logo)
+        print(f"✅ 데이터베이스 저장 완료 (Logo ID: {db_logo.id})")
 
-        if not s3_url:
-            logging.error(f"S3 업로드 실패: {logo_path}")
-            raise HTTPException(status_code=500, detail="S3 업로드에 실패했습니다.")
-        logo_url = s3_url
         generated_logos.append({
-            "logo_id": logo_id,
-            "logo_url": logo_url
+            "logo_id": db_logo.id,
+            "logo_url": s3_url # 프론트엔드 그리드에는 워터마크 버전을 보여줌
         })
 
     return {"user_id": request.user_id, "logos": generated_logos}

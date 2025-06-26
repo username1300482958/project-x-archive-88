@@ -21,13 +21,13 @@ def upscale_image_with_replicate(image_file_object, scale: int = 2) -> str:
     print(f"🚀 Replicate에 업스케일링 요청 시작 (파일 데이터 직접 전달)...")
     
     # 👇 이제 URL이 아닌, 전달받은 파일 객체를 바로 input으로 사용합니다.
-    result = replicate_client.run(
+    result = list(replicate_client.run(
         "nightmareai/real-esrgan:f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa",
         input={
             "image": image_file_object,
             "scale": scale
         }
-    )
+    ))
     print("✅ Replicate 작업 완료, 결과 URL 수신")
 
 

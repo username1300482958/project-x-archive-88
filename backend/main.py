@@ -194,13 +194,17 @@ def send_contact_message(form: ContactForm):
 async def generate_logo(
     request: LogoRequest,
     db: Session = Depends(get_db),
-    # 👇 [수정 1] 이제 이 함수도 '요금제 확인 전문가'를 사용합니다.
-    user_obj: models.User = Depends(get_user_with_plan),
+    # 👇 [수정] get_user_with_plan 대신, 원래 방식인 get_current_user를 다시 사용합니다.
+    user: dict = Depends(get_current_user),
     req: Request = None
 ):
     print("🟡 generate_logo 진입")
     client_ip = get_client_ip(req)
     print(f"📡 요청자 IP: {client_ip}")
+
+    # 🔒 권한검사
+    if request.user_id != user["sub"]:
+        raise HTTPException(status_code=403, detail="권한이 없습니다.")
     
     # ✅ abuse 방지 필터링: 최근 3시간 이내 동일 IP에서 다른 FREE 계정 생성 기록 확인
     three_hours_ago = datetime.utcnow() - timedelta(hours=3)
@@ -234,21 +238,39 @@ async def generate_logo(
     # ✅ IP 로깅 (비교용)
     log_error(user_id=request.user_id, context="AbuseCheck", message=client_ip)
 
-    # user_obj를 직접 받으므로, DB에서 또 조회할 필요가 없습니다.
-    plan = (user_obj.plan or "FREE").upper()
+    # 👇 [핵심 수정] 플랜을 결정하는 로직을 함수 맨 위에 명확하게 정의합니다.
+    plan = "FREE" # 기본값
+    YOUR_DEVELOPER_USER_ID = "104120949912979219868" # 개발자님 ID
+
+    # 토큰에 admin 플래그가 있거나, 요청 user_id가 개발자 ID와 일치하면 ENTERPRISE로 설정
+    if user.get("is_admin") or request.user_id == YOUR_DEVELOPER_USER_ID:
+        plan = "ENTERPRISE"
+        print(f"🟢 관리자/개발자 계정으로 확인됨. 플랜을 {plan}로 설정합니다.")
+    else:
+        # 일반 사용자의 경우 DB에서 플랜 정보를 조회
+        user_obj = db.query(models.User).filter(models.User.id == request.user_id).first()
+        if user_obj and user_obj.plan:
+            plan = user_obj.plan.upper()
+        # 만약 DB에도 user가 없다면, 신규 유저로 간주하고 아래에서 생성하며 plan은 'FREE' 유지
     
     # 👇 [수정 2] 요금제 한도 확인 시, 관리자/개발자 예외 처리를 명확하게 합니다.
     # get_user_with_plan 덕분에 user_obj.plan이 'ENTERPRISE'로 넘어옵니다.
     limits = PLAN_CONFIG.get(plan, PLAN_CONFIG["FREE"])
     new_logos_count = request.batch_size
 
-    # 총 개수 제한 체크
+    # --- (이하 모든 요금제 제한 확인, 폴더 생성, 프롬프트 생성 로직은 기존과 동일) ---
+    if new_logos_count > limits["max_batch"]:
+        raise HTTPException(
+            status_code=403,
+            detail=f"{plan} 플랜에서는 한 번에 최대 {limits['max_batch']}개까지 생성할 수 있습니다."
+        )
     current_count = db.query(models.Logo).filter(models.Logo.user_id == request.user_id).count()
     if current_count + new_logos_count > limits["max_total"]:
         raise HTTPException(
             status_code=403,
             detail=f"{plan} 플랜에서는 최대 {limits['max_total']}개의 로고까지만 생성할 수 있습니다."
         )
+    
     
     sanitized_colors = [color.replace("#", "") for color in request.colors]
     if not sanitized_colors:

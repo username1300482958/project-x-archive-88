@@ -39,7 +39,7 @@ def download_highres_logo(
         #    이 URL은 일정 시간 동안만 공개적으로 접근 가능합니다.
         presigned_original_url = generate_presigned_url_from_s3_url(
             logo.s3_url_original,
-            expires_in=300 # 5분 동안 유효한 링크
+            expiration=300 # 5분 동안 유효한 링크
         )
         if not presigned_original_url:
             raise RuntimeError("원본 이미지의 임시 접근 주소 생성에 실패했습니다.")

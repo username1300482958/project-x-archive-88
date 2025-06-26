@@ -1,27 +1,15 @@
 services:
   # 1. 웹 서버 (FastAPI)
   - type: web
-    name: brandie-web
+    name: brandie-web # <-- 이름을 다시 원래대로
     env: python
-    plan: free # <-- 무료 플랜 사용 명시
+    plan: free
     buildCommand: 'pip install -r backend/requirements.txt'
     startCommand: 'gunicorn -w 4 -k uvicorn.workers.UvicornWorker --timeout 240 backend.main:app'
     envVars:
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: brandie-redis
-          property: connectionString
-
-  # 2. 워커 (Celery)
-  - type: worker
-    name: brandie-worker
-    env: python
-    plan: free # <-- 무료 플랜 사용 명시
-    buildCommand: 'pip install -r backend/requirements.txt'
-    startCommand: 'celery -A backend.celery_worker worker --loglevel=info'
-    envVars:
-      - key: REDIS_URL
+      - key: DATABASE_URL
+        sync: false # <-- 이 값을 외부(Render 대시보드)에서 설정하겠다는 의미
+      - key: REDIS_URL # <-- Redis 연결은 그대로 유지
         fromService:
           type: redis
           name: brandie-redis

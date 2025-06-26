@@ -3,27 +3,24 @@ services:
   - type: web
     name: brandie-web
     env: python
-    # buildCommand는 프로젝트 루트에서 실행되므로 경로를 정확히 지정
     buildCommand: 'pip install -r backend/requirements.txt'
-    # startCommand도 루트에서 실행되므로, backend.main:app 으로 경로를 지정
     startCommand: 'gunicorn -w 4 -k uvicorn.workers.UvicornWorker --timeout 240 backend.main:app'
     envVars:
       - key: REDIS_URL
         fromService:
           type: redis
-          name: brandie-redis # Redis 서비스 이름
-          property: internalURL
+          name: brandie-redis
+          property: connectionString # <-- 최종 정답으로 수정
 
   # 2. 워커 (Celery)
   - type: worker
     name: brandie-worker
     env: python
     buildCommand: 'pip install -r backend/requirements.txt'
-    # startCommand에서 Celery 앱의 경로를 backend.celery_worker 로 명확히 지정
     startCommand: 'celery -A backend.celery_worker worker --loglevel=info'
     envVars:
       - key: REDIS_URL
         fromService:
           type: redis
-          name: brandie-redis # Redis 서비스 이름
-          property: internalURL
+          name: brandie-redis
+          property: connectionString # <-- 최종 정답으로 수정

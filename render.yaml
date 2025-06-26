@@ -12,7 +12,7 @@ services:
         fromService:
           type: redis
           name: brandie-redis # Redis 서비스 이름
-          property: internalUrl
+          property: internalURL
 
   # 2. 워커 (Celery)
   - type: worker
@@ -26,4 +26,4 @@ services:
         fromService:
           type: redis
           name: brandie-redis # Redis 서비스 이름
-          property: internalUrl
+          property: internalURL

@@ -20,9 +20,6 @@ STYLE_DICTIONARY: Dict[str, str] = {
     "Playful": "rounded corners, whimsical characters, bright and vibrant colors, fun and approachable typography, cartoonish elements",
 }
 
-
-
-# ✅ 가독성과 안정성을 극대화한 최종 프롬프트 생성 로직
 def generate_prompt_with_gpt(
     brand_name: str,
     logo_style: str,
@@ -33,20 +30,25 @@ def generate_prompt_with_gpt(
     background: str
 ) -> str:
     
-    # [핵심 수정] 'Minimalist' 스타일은 별도의 단순한 로직으로 처리합니다.
+    # 이 변수는 'Minimalist'가 아닌 스타일에서만 사용됩니다.
+    colors_str = ", ".join(f"#{c.lstrip('#')}" for c in colors)
+    
+    # 'Minimalist' 스타일은 별도의 단순하고 강력한 로직으로 처리합니다.
     if style_detail and style_detail.capitalize() == "Minimalist":
         print("✅ 'Minimalist' 스타일 감지. 단순 프롬프트 생성 로직을 사용합니다.")
         
-        # 필수 키워드 조합
-        color_keyword = f"in color {colors[0]}" if colors else "monochromatic"
+        # 1. 핵심 오브젝트 키워드를 정의합니다.
         core_keyword = core_object if core_object else f"abstract shape for {brand_name}"
         
-        # 최종 프롬프트 조합
-        # 예: "ultra-minimalist 2d vector logo, a simple brain icon, in color #A855F7, clean lines, on a solid white background --no details, text, 3d"
+        # 2. 색상 지시어를 더욱 명확하게 만듭니다.
+        #    'Minimalist'에서는 첫 번째 색상만 사용하는 것을 강제합니다.
+        color_instruction = f"using only the color {colors[0]}" if colors else "monochromatic"
+
+        # 3. 최종 프롬프트를 조합합니다. (불필요한 코드 제거 및 색상 지시어 강화)
         final_prompt = (
             f"ultra-minimalist 2d vector logo, a simple {core_keyword} icon, "
-            f"using only the color {colors_str}, 2d flat vector, "
-            f"clean bold lines, centered, on a solid {background} background "
+            f"{color_instruction}, 2d flat vector, clean bold lines, centered, "
+            f"on a solid {background} background "
             f"--no text, letters, words, realistic, photo, 3d, gradients, shadow, multiple colors, complex details"
         )
         
@@ -55,8 +57,6 @@ def generate_prompt_with_gpt(
 
     # 'Minimalist'가 아닌 다른 스타일은 기존의 GPT-4 호출 방식을 유지합니다.
     print(f"✅ '{style_detail}' 스타일 감지. GPT-4 프롬프트 생성 로직을 사용합니다.")
-    
-    colors_str = ", ".join(f"#{c.lstrip('#')}" for c in colors)
     
     style_key = style_detail.capitalize() if style_detail else ""
     style_description = ""
@@ -69,7 +69,7 @@ def generate_prompt_with_gpt(
     elif background.lower() == 'black':
         background_instruction = "a solid pure black background (#000000)"
 
-    # 시스템 메시지는 이전과 동일하게 강력한 역할을 부여
+    # (이하 GPT-4 호출 로직은 기존과 동일합니다)
     system_msg = {
         "role": "system",
         "content": """
@@ -87,7 +87,6 @@ Your task is a strict, step-by-step process:
 """
     }
 
-    # 각 항목이 있는지 확인하고, 있을 때만 프롬프트에 추가하는 명확한 구조
     prompt_lines = [
         "Generate a logo prompt based on the following requirements:",
         f"- Brand Name: '{brand_name}'",
@@ -97,7 +96,6 @@ Your task is a strict, step-by-step process:
         prompt_lines.append(f"- Visual Style: {style_description}")
     if core_object:
         prompt_lines.append(f"- Core Object Suggestion: '{core_object}'")
-    # 'symbol' 타입이 아닐 때만 폰트 스타일 추가
     if font_style and logo_style.lower() != 'symbol':
         prompt_lines.append(f"- Font Style: '{font_style}'")
     if colors:
@@ -114,8 +112,7 @@ Your task is a strict, step-by-step process:
             temperature=0.4,
         )
         final_prompt = response.choices[0].message.content.strip()
-
-        # 'symbol' 스타일일 때만 텍스트 제거 구문을 강제로 추가
+        
         if logo_style.lower() == "symbol":
             final_prompt += " --no text, letters, words, fonts"
             

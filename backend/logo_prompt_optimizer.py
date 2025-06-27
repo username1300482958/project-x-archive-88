@@ -44,9 +44,10 @@ def generate_prompt_with_gpt(
         # 최종 프롬프트 조합
         # 예: "ultra-minimalist 2d vector logo, a simple brain icon, in color #A855F7, clean lines, on a solid white background --no details, text, 3d"
         final_prompt = (
-            f"ultra-minimalist 2d vector logo, {core_keyword}, {color_keyword}, "
-            f"icon style, clean bold lines, centered, on a solid {background} background "
-            f"--no text, letters, words, realistic, photo, 3d, gradients, shadow, details"
+            f"ultra-minimalist 2d vector logo, a simple {core_keyword} icon, "
+            f"using only the color {colors_str}, 2d flat vector, "
+            f"clean bold lines, centered, on a solid {background} background "
+            f"--no text, letters, words, realistic, photo, 3d, gradients, shadow, multiple colors, complex details"
         )
         
         print(f"✅ 생성된 단순 프롬프트: {final_prompt}")

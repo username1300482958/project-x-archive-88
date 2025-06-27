@@ -12,10 +12,14 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ✅ 프론트엔드의 옵션과 키를 정확히 일치시킨 스타일 사전
 STYLE_DICTIONARY: Dict[str, str] = {
-    "Minimalist": "ultra-clean lines, essential elements only, generous negative space, simple geometric forms, clarity, precision",
+    # ▼▼▼ "Minimalist"의 내용을 아래와 같이 수정합니다. ▼▼▼
+    "Minimalist": "ultra-minimalist, simple icon, 2d, flat, vector, clean lines, solid color, high contrast, negative space",
+    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
     "Modern": "sleek, abstract shapes, bold typography, functional, uncluttered, forward-thinking aesthetic",
     "Playful": "rounded corners, whimsical characters, bright and vibrant colors, fun and approachable typography, cartoonish elements",
 }
+
 
 
 # ✅ 가독성과 안정성을 극대화한 최종 프롬프트 생성 로직
@@ -29,15 +33,36 @@ def generate_prompt_with_gpt(
     background: str
 ) -> str:
     
+    # [핵심 수정] 'Minimalist' 스타일은 별도의 단순한 로직으로 처리합니다.
+    if style_detail and style_detail.capitalize() == "Minimalist":
+        print("✅ 'Minimalist' 스타일 감지. 단순 프롬프트 생성 로직을 사용합니다.")
+        
+        # 필수 키워드 조합
+        color_keyword = f"in color {colors[0]}" if colors else "monochromatic"
+        core_keyword = core_object if core_object else f"abstract shape for {brand_name}"
+        
+        # 최종 프롬프트 조합
+        # 예: "ultra-minimalist 2d vector logo, a simple brain icon, in color #A855F7, clean lines, on a solid white background --no details, text, 3d"
+        final_prompt = (
+            f"ultra-minimalist 2d vector logo, {core_keyword}, {color_keyword}, "
+            f"icon style, clean bold lines, centered, on a solid {background} background "
+            f"--no text, letters, words, realistic, photo, 3d, gradients, shadow, details"
+        )
+        
+        print(f"✅ 생성된 단순 프롬프트: {final_prompt}")
+        return final_prompt
+
+    # 'Minimalist'가 아닌 다른 스타일은 기존의 GPT-4 호출 방식을 유지합니다.
+    print(f"✅ '{style_detail}' 스타일 감지. GPT-4 프롬프트 생성 로직을 사용합니다.")
+    
     colors_str = ", ".join(f"#{c.lstrip('#')}" for c in colors)
     
-    # ✅ [개선] .capitalize()를 사용하여 'Minimalist', 'minimalist' 등 다양한 입력에 대응
     style_key = style_detail.capitalize() if style_detail else ""
     style_description = ""
     if style_key in STYLE_DICTIONARY:
         style_description = f"The required visual style is '{style_key}', which should be interpreted as: {STYLE_DICTIONARY[style_key]}."
 
-    background_instruction = f"solid {background} background" # 기본값
+    background_instruction = f"solid {background} background"
     if background.lower() == 'white':
         background_instruction = "a solid pure white background (#FFFFFF)"
     elif background.lower() == 'black':

@@ -30,21 +30,15 @@ def generate_prompt_with_gpt(
     background: str
 ) -> str:
     
-    # 이 변수는 'Minimalist'가 아닌 스타일에서만 사용됩니다.
     colors_str = ", ".join(f"#{c.lstrip('#')}" for c in colors)
     
     # 'Minimalist' 스타일은 별도의 단순하고 강력한 로직으로 처리합니다.
     if style_detail and style_detail.capitalize() == "Minimalist":
         print("✅ 'Minimalist' 스타일 감지. 단순 프롬프트 생성 로직을 사용합니다.")
         
-        # 1. 핵심 오브젝트 키워드를 정의합니다.
         core_keyword = core_object if core_object else f"abstract shape for {brand_name}"
-        
-        # 2. 색상 지시어를 더욱 명확하게 만듭니다.
-        #    'Minimalist'에서는 첫 번째 색상만 사용하는 것을 강제합니다.
         color_instruction = f"using only the color {colors[0]}" if colors else "monochromatic"
 
-        # 3. 최종 프롬프트를 조합합니다. (불필요한 코드 제거 및 색상 지시어 강화)
         final_prompt = (
             f"ultra-minimalist 2d vector logo, a simple {core_keyword} icon, "
             f"{color_instruction}, 2d flat vector, clean bold lines, centered, "
@@ -69,23 +63,25 @@ def generate_prompt_with_gpt(
     elif background.lower() == 'black':
         background_instruction = "a solid pure black background (#000000)"
 
-    # (이하 GPT-4 호출 로직은 기존과 동일합니다)
+    # ▼▼▼▼ [수정 1] GPT-4에 보내는 시스템 메시지에 그림자 금지 규칙을 추가합니다. ▼▼▼▼
     system_msg = {
         "role": "system",
         "content": """
 You are a world-class Creative Director at a global branding agency. Your sole job is to take a user's structured request and synthesize it into a masterpiece of a prompt for the DALL-E 3 image generation model.
 
 Your task is a strict, step-by-step process:
-1.  **Analyze & Conceptualize:** Deeply analyze all user inputs: Brand Name, Logo Type, Visual Style, and especially the Core Object Suggestion. Synthesize these into a single, strong visual concept for the logo. If a 'Core Object' is provided, it MUST be the central theme. If the name is abstract and no object is provided, you must invent a powerful visual metaphor.
-2.  **Construct Prompt:** Write a single, highly-detailed, and visually descriptive prompt based on your chosen concept for DALL-E 3.
+1.  **Analyze & Conceptualize:** Deeply analyze all user inputs... (기존 내용과 동일)
+2.  **Construct Prompt:** Write a single, highly-detailed, and visually descriptive prompt... (기존 내용과 동일)
 
 **STRICT RULES FOR THE FINAL PROMPT:**
 - The prompt MUST be in English and a single paragraph.
 - It MUST start with "2D vector logo of...".
 - It MUST specify "flat design, clean lines, high contrast".
-- The final sentence must always be "The logo must be on a solid, clean background. --no 3d, photo, realistic, shadow, gradients."
+- The final sentence must always be "The logo must be on a solid, clean background."
+- **Crucially, the prompt MUST NOT generate any kind of shadows, drop shadows, or 3d-like shading effects. It must be absolutely flat.**
 """
     }
+    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
     prompt_lines = [
         "Generate a logo prompt based on the following requirements:",
@@ -111,11 +107,19 @@ Your task is a strict, step-by-step process:
             messages=[system_msg, {"role": "user", "content": user_request}],
             temperature=0.4,
         )
+        
+        # ▼▼▼▼ [수정 2] GPT-4가 생성한 프롬프트에 그림자 금지 네거티브 프롬프트를 강제로 추가합니다. ▼▼▼▼
         final_prompt = response.choices[0].message.content.strip()
         
+        # 항상 그림자와 3D 효과를 금지하도록 네거티브 프롬프트를 추가합니다.
+        negative_prompts = " --no 3d, photo, realistic, shadow, gradients, shading"
+
         if logo_style.lower() == "symbol":
-            final_prompt += " --no text, letters, words, fonts"
-            
+            negative_prompts += ", text, letters, words, fonts"
+
+        final_prompt += negative_prompts
+        # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
         print(f"✅ GPT-4가 생성한 최종 프롬프트: {final_prompt}")
         return final_prompt
     except Exception as e:

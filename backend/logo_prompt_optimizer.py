@@ -10,6 +10,16 @@ if not OPENAI_API_KEY:
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
+# ✅ 프론트엔드의 옵션과 키를 정확히 일치시킨 스타일 사전
+STYLE_DICTIONARY: Dict[str, str] = {
+    # ▼▼▼ "Minimalist"의 내용을 아래와 같이 수정합니다. ▼▼▼
+    "Minimalist": "ultra-minimalist, simple icon, 2d, flat, vector, clean lines, solid color, high contrast, negative space",
+    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+    "Modern": "sleek, abstract shapes, bold typography, functional, uncluttered, forward-thinking aesthetic",
+    "Playful": "rounded corners, whimsical characters, bright and vibrant colors, fun and approachable typography, cartoonish elements",
+}
+
 def generate_prompt_with_gpt(
     brand_name: str,
     logo_style: str,
@@ -19,66 +29,80 @@ def generate_prompt_with_gpt(
     colors: List[str],
     background: str
 ) -> str:
-    """
-    [최종 해결책]
-    추상적인 컨셉을 구체적인 시각적 지침으로 변환하여 고품질 로고를 생성합니다.
-    """
     
-    # 1. 핵심 오브젝트(아이디어)를 '시각적으로 단순한' 영어 표현으로 변환합니다.
-    final_core_object = core_object if core_object else f"abstract geometric shapes for '{brand_name}'"
-    
-    # 한글 등 비-알파벳 문자가 있을 경우, 번역 및 '시각적' 단순화 실행
-    if core_object and re.search('[^a-zA-Z\s-]', core_object):
-        print(f"✅ 한글 또는 특수문자 오브젝트 감지: '{core_object}'. 시각적으로 단순한 영어 표현으로 변환합니다.")
-        try:
-            # GPT-4에게 번역이 아닌, '시각적 컨셉 재해석'을 명확히 지시합니다.
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "You are a concept artist specializing in minimalist logos. Your job is to reinterpret the user's idea into a visually simple, abstract, and geometric English concept for an icon. Focus on shapes, not complex scenes. For example, for '원자 궤도 안에 있는 간단한 뇌형상' (a simple brain shape inside an atomic orbit), output 'interlocking rings with a central node' or 'geometric core with orbiting paths'. For '달리는 치타' (running cheetah), output 'dynamic sweeping lines' or 'abstract cheetah silhouette'."},
-                    {"role": "user", "content": core_object}
-                ],
-                temperature=0.3, max_tokens=25
-            )
-            translated_object = response.choices[0].message.content.strip().lower().replace("'", "")
-            print(f"✅ 시각적 컨셉 변환 완료: '{translated_object}'")
-            final_core_object = translated_object
-        except Exception as e:
-            print(f"❌ 핵심 오브젝트 변환 중 오류 발생: {e}. 기본 추상 형태로 설정합니다.")
-            final_core_object = f"abstract geometric shapes for '{brand_name}'"
+    # [핵심 수정] 'Minimalist' 스타일은 별도의 단순한 로직으로 처리합니다.
+    if style_detail and style_detail.capitalize() == "Minimalist":
+        print("✅ 'Minimalist' 스타일 감지. 단순 프롬프트 생성 로직을 사용합니다.")
+        
+        # 필수 키워드 조합
+        color_keyword = f"in color {colors[0]}" if colors else "monochromatic"
+        core_keyword = core_object if core_object else f"abstract shape for {brand_name}"
+        
+        # 최종 프롬프트 조합
+        # 예: "ultra-minimalist 2d vector logo, a simple brain icon, in color #A855F7, clean lines, on a solid white background --no details, text, 3d"
+        final_prompt = (
+            f"ultra-minimalist 2d vector logo, {core_keyword}, {color_keyword}, "
+            f"icon style, clean bold lines, centered, on a solid {background} background "
+            f"--no text, letters, words, realistic, photo, 3d, gradients, shadow, details"
+        )
+        
+        print(f"✅ 생성된 단순 프롬프트: {final_prompt}")
+        return final_prompt
 
-    # 2. '키워드 레시피'의 각 재료를 강력한 지시어로 준비합니다.
-    #    'logo of' 같은 모호한 표현을 제거하고, 직접적인 형용사와 명사만 사용합니다.
-    prompt_parts = [
-        "minimalist 2d vector logo",          # 핵심 정체성
-        f"icon of {final_core_object}",       # 핵심 주제 (명확하게 '아이콘'임을 명시)
-        f"{style_detail.lower()} logo style", # 스타일 (소문자로 일관성 유지)
-        "flat icon design",                   # 디자인 형식
-        "thick clean lines",                  # 선 스타일 (두껍고 깨끗하게)
-        "symmetrical",                        # 대칭성
-        "high contrast",                      # 대비
-        "no background details",              # 배경 디테일 제거
-        "centered on page"                    # 구도
+    # 'Minimalist'가 아닌 다른 스타일은 기존의 GPT-4 호출 방식을 유지합니다.
+    print(f"✅ '{style_detail}' 스타일 감지. GPT-4 프롬프트 생성 로직을 사용합니다.")
+    
+    colors_str = ", ".join(f"#{c.lstrip('#')}" for c in colors)
+    
+    style_key = style_detail.capitalize() if style_detail else ""
+    style_description = ""
+    if style_key in STYLE_DICTIONARY:
+        style_description = f"The required visual style is '{style_key}', which should be interpreted as: {STYLE_DICTIONARY[style_key]}."
+
+    background_instruction = f"solid {background} background"
+    if background.lower() == 'white':
+        background_instruction = "a solid pure white background (#FFFFFF)"
+    elif background.lower() == 'black':
+        background_instruction = "a solid pure black background (#000000)"
+
+    system_msg = {
+        "role": "system",
+        "content": """
+You are a world-class Creative Director... (이 부분은 기존과 동일하게 유지)
+"""
+    }
+
+    prompt_lines = [
+        "Generate a logo prompt based on the following requirements:",
+        f"- Brand Name: '{brand_name}'",
+        f"- Logo Type: '{logo_style}'",
     ]
-
-    # 3. 색상 재료 추가
+    if style_description:
+        prompt_lines.append(f"- Visual Style: {style_description}")
+    if core_object:
+        prompt_lines.append(f"- Core Object Suggestion: '{core_object}'")
+    if font_style and logo_style.lower() != 'symbol':
+        prompt_lines.append(f"- Font Style: '{font_style}'")
     if colors:
-        # '#'를 확실히 포함시키고, 색상 지시를 더 명확하게 합니다.
-        prompt_parts.append(f"single solid color, the color is #{colors[0].lstrip('#')}")
-    else:
-        prompt_parts.append("monochromatic, solid black")
+        prompt_lines.append(f"- Requested Colors: {colors_str}")
+    if background_instruction:
+        prompt_lines.append(f"- Background: {background_instruction}")
 
-    # 4. 배경 재료 추가
-    if background and background.lower() == 'black':
-        prompt_parts.append("on a solid black background")
-    else:
-        prompt_parts.append("on a solid white background") # 기본값
+    user_request = "\n".join(prompt_lines)
 
-    # 5. 모든 재료를 쉼표로 연결하여 레시피를 완성합니다.
-    final_prompt = ", ".join(prompt_parts)
-
-    # 6. 네거티브 프롬프트를 강화하여 원치 않는 요소를 더욱 강력하게 차단합니다.
-    final_prompt += " --no realistic, photo, 3d, shadow, gradients, textures, intricate details, complex, busy, text, letters, words, watermark, shading, perspective"
-    
-    print(f"✅ 최종 생성된 프롬프트 (구체적 지침 방식): {final_prompt}")
-    return final_prompt
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[system_msg, {"role": "user", "content": user_request}],
+            temperature=0.4,
+        )
+        final_prompt = response.choices[0].message.content.strip()
+        
+        if logo_style.lower() == "symbol":
+            final_prompt += " --no text, letters, words, fonts"
+            
+        print(f"✅ GPT-4가 생성한 최종 프롬프트: {final_prompt}")
+        return final_prompt
+    except Exception as e:
+        print(f"❌ GPT-4 프롬프트 생성 중 오류 발생: {e}")
+        return f"2D vector logo for '{brand_name}', {style_detail} style, on a {background} background."

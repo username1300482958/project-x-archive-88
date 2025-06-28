@@ -601,3 +601,5 @@ def schedule_s3_cleanup():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+print("✨✨ 워크플로우 연습 성공! 이 메시지는 실제 서비스에는 보이지 않아야 합니다. ✨✨")

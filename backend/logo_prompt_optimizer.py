@@ -10,12 +10,17 @@ if not OPENAI_API_KEY:
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# ✅ 프론트엔드의 옵션과 키를 정확히 일치시킨 스타일 사전
+# --- [핵심 수정 1] STYLE_DICTIONARY 강화 ---
+# 'Minimalist'에 대한 지시사항을 훨씬 더 구체적이고 명확하게 수정합니다.
+# 'bold lines'를 'thin lines'로 바꾸고, 텍스트 금지 등 상세 조건을 추가합니다.
 STYLE_DICTIONARY: Dict[str, str] = {
-    # ▼▼▼ "Minimalist"의 내용을 아래와 같이 수정합니다. ▼▼▼
-    "Minimalist": "ultra-minimalist, simple icon, 2d, flat, vector, clean lines, solid color, high contrast, negative space",
-    # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-
+    "Minimalist": (
+        "ultra-minimalist logo, focusing on a single, simple icon. "
+        "Use extremely clean, thin lines (IMPORTANT: not bold or thick). "
+        "2D flat vector style. Must use the requested solid colors, with no gradients. "
+        "Emphasize negative space and high contrast. "
+        "The final image must contain ONLY the icon, with absolutely no text or letters."
+    ),
     "Modern": "sleek, abstract shapes, bold typography, functional, uncluttered, forward-thinking aesthetic",
     "Playful": "rounded corners, whimsical characters, bright and vibrant colors, fun and approachable typography, cartoonish elements",
 }
@@ -30,33 +35,18 @@ def generate_prompt_with_gpt(
     background: str
 ) -> str:
     
-    # [핵심 수정] 'Minimalist' 스타일은 별도의 단순한 로직으로 처리합니다.
-    if style_detail and style_detail.capitalize() == "Minimalist":
-        print("✅ 'Minimalist' 스타일 감지. 단순 프롬프트 생성 로직을 사용합니다.")
-        
-        # 필수 키워드 조합
-        color_keyword = f"in color {colors[0]}" if colors else "monochromatic"
-        core_keyword = core_object if core_object else f"abstract shape for {brand_name}"
-        
-        # 최종 프롬프트 조합
-        # 예: "ultra-minimalist 2d vector logo, a simple brain icon, in color #A855F7, clean lines, on a solid white background --no details, text, 3d"
-        final_prompt = (
-            f"ultra-minimalist 2d vector logo, {core_keyword}, {color_keyword}, "
-            f"icon style, clean bold lines, centered, on a solid {background} background "
-            f"--no text, letters, words, realistic, photo, 3d, gradients, shadow, details"
-        )
-        
-        print(f"✅ 생성된 단순 프롬프트: {final_prompt}")
-        return final_prompt
+    # --- [핵심 수정 2] 'Minimalist' 전용 로직 삭제 ---
+    # if/else 분기를 제거하여 모든 스타일 요청이 GPT-4o를 통하도록 일원화합니다.
+    # 이렇게 하면 GPT-4o가 강화된 STYLE_DICTIONARY를 바탕으로 최적의 프롬프트를 생성합니다.
 
-    # 'Minimalist'가 아닌 다른 스타일은 기존의 GPT-4 호출 방식을 유지합니다.
-    print(f"✅ '{style_detail}' 스타일 감지. GPT-4 프롬프트 생성 로직을 사용합니다.")
+    print(f"✅ '{style_detail}' 스타일 감지. GPT-4o 프롬프트 생성 로직을 사용합니다.")
     
     colors_str = ", ".join(f"#{c.lstrip('#')}" for c in colors)
     
     style_key = style_detail.capitalize() if style_detail else ""
     style_description = ""
     if style_key in STYLE_DICTIONARY:
+        # 강화된 스타일 설명을 GPT-4o에게 전달합니다.
         style_description = f"The required visual style is '{style_key}', which should be interpreted as: {STYLE_DICTIONARY[style_key]}."
 
     background_instruction = f"solid {background} background"
@@ -65,13 +55,25 @@ def generate_prompt_with_gpt(
     elif background.lower() == 'black':
         background_instruction = "a solid pure black background (#000000)"
 
+    # --- 시스템 메시지: 역할 및 규칙 부여 ---
+    # (기존 시스템 메시지가 좋다면 그대로 사용하셔도 됩니다. 아래는 예시입니다.)
     system_msg = {
         "role": "system",
         "content": """
-You are a world-class Creative Director... (이 부분은 기존과 동일하게 유지)
+You are a world-class Creative Director specializing in DALL-E prompt engineering for logo design.
+Your task is to convert user requirements into a single, concise, and effective DALL-E prompt.
+
+**Rules:**
+1.  **Be Direct:** Start the prompt immediately with the core subject (e.g., "A minimalist vector logo of a brain..."). Do not use conversational phrases.
+2.  **Keyword First:** Place the most important keywords (like style, subject, and color) at the beginning of the prompt.
+3.  **Clarity over Complexity:** The prompt must be clear and unambiguous.
+4.  **Enforce 'No Text':** If the logo style is 'Symbol', it is CRITICAL that the logo has no text, letters, or words. Explicitly command this.
+5.  **Color Adherence:** If colors are specified, they MUST be incorporated as solid colors.
+6.  **Style Interpretation:** Use the provided style interpretation from the user prompt as your primary guide.
 """
     }
 
+    # --- 사용자 요청 구성 ---
     prompt_lines = [
         "Generate a logo prompt based on the following requirements:",
         f"- Brand Name: '{brand_name}'",
@@ -92,17 +94,24 @@ You are a world-class Creative Director... (이 부분은 기존과 동일하게
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o", # 또는 gpt-4-turbo
             messages=[system_msg, {"role": "user", "content": user_request}],
             temperature=0.4,
         )
         final_prompt = response.choices[0].message.content.strip()
         
+        # --- [핵심 수정 3] 강력한 네거티브 프롬프트 추가 ---
+        # Symbol 로고일 경우, 더 강력하고 명시적인 네거티브 프롬프트를 추가합니다.
         if logo_style.lower() == "symbol":
-            final_prompt += " --no text, letters, words, fonts"
+            # DALL-E 3/4에서 --style raw는 프롬프트를 더 충실히 따르도록 돕습니다.
+            final_prompt += " --style raw --no text, letters, words, fonts, typography, signature, watermark"
             
-        print(f"✅ GPT-4가 생성한 최종 프롬프트: {final_prompt}")
+        # 프롬프트에 포함될 수 있는 따옴표나 설명 문구 제거
+        final_prompt = final_prompt.replace('"', '')
+        
+        print(f"✅ GPT-4o가 생성한 최종 프롬프트: {final_prompt}")
         return final_prompt
     except Exception as e:
-        print(f"❌ GPT-4 프롬프트 생성 중 오류 발생: {e}")
+        print(f"❌ GPT-4o 프롬프트 생성 중 오류 발생: {e}")
+        # 실패 시에도 기본 프롬프트는 유지
         return f"2D vector logo for '{brand_name}', {style_detail} style, on a {background} background."

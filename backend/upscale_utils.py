@@ -10,54 +10,35 @@ REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN")
 if not REPLICATE_API_TOKEN:
     raise RuntimeError("❌ REPLICATE_API_TOKEN 환경변수가 설정되지 않았습니다.")
 
-# 2) Replicate 클라이언트 초기화
+# Replicate 클라이언트 초기화
 replicate_client = replicate.Client(api_token=REPLICATE_API_TOKEN)
 
-def upscale_image_with_replicate(image_file_object, scale: int = 2) -> str:
+# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+# --- 새로운 메모리 최적화 함수 ---
+def get_replicate_upscale_url(image_url: str, scale: int = 2) -> str:
     """
-    [최종 디버깅 완료] Replicate가 반환하는 'FileOutput' 객체를 직접 처리하여
-    업스케일링을 수행하고 S3 presigned URL을 반환합니다.
+    [최적화 완료] Replicate를 실행하고, 결과 이미지의 URL만 즉시 반환합니다.
+    이 함수는 서버의 메모리를 거의 사용하지 않습니다.
     """
-    print(f"🚀 Replicate에 업스케일링 요청 시작 (파일 데이터 직접 전달)...")
-    
-    # 1. replicate.run()을 호출하여 'FileOutput' 객체를 받습니다.
-    file_output = replicate_client.run(
+    print(f"🚀 Replicate에 업스케일링 요청 시작 (URL 전달 방식)...")
+
+    # 1. replicate.run()을 호출하여 결과물(이미지 URL)을 직접 받습니다.
+    #    이전처럼 파일을 다운로드하고 처리하는 과정이 모두 생략됩니다.
+    output_url = replicate_client.run(
         "nightmareai/real-esrgan:f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa",
         input={
-            "image": image_file_object,
+            "image": image_url, # 이제 이곳에는 S3의 presigned URL이 들어옵니다.
             "scale": scale
         }
     )
-    print("✅ Replicate 작업 완료, 'FileOutput' 객체 수신")
+    
+    # 2. 결과가 올바른 URL 형태인지 간단히 확인합니다.
+    if not isinstance(output_url, str) or not output_url.startswith("http"):
+        # 만약 결과가 리스트 형태 등 예상과 다를 경우 에러 처리
+        print(f"❌ Replicate 결과가 예상과 다릅니다: {output_url}")
+        raise RuntimeError("Replicate에서 예상치 못한 결과 형식을 반환했습니다.")
 
-    # 2. 'FileOutput' 객체에서 .read() 메소드를 호출하여 이미지 데이터(bytes)를 직접 추출합니다.
-    #    이전의 모든 복잡한 로직이 이 한 줄로 해결됩니다.
-    image_bytes = file_output.read()
-
-    # 3. 추출한 이미지 데이터를 임시 파일에 씁니다.
-    tmp_dir = tempfile.gettempdir()
-    tmp_filename = f"upscaled_{uuid4().hex[:8]}.png"
-    tmp_path = os.path.join(tmp_dir, tmp_filename)
-    with open(tmp_path, "wb") as f:
-        f.write(image_bytes)
-
-    # 4. 이후 로직은 S3 업로드, presigned URL 생성으로 동일합니다.
-    object_key = f"upscaled/{tmp_filename}"
-    s3_url = upload_to_s3(tmp_path, object_key)
-    if not s3_url:
-        raise RuntimeError("❌ S3 업로드에 실패했습니다.")
-
-    presigned = generate_presigned_url_from_s3_url(
-        s3_url,
-        download_name=tmp_filename
-    )
-    if not presigned:
-        presigned = s3_url
-
-    try:
-        os.remove(tmp_path)
-    except Exception:
-        pass
-
-    print("✅ 모든 업스케일링 및 업로드 과정 성공")
-    return presigned
+    print(f"✅ Replicate 작업 완료, 결과 URL 수신: {output_url}")
+    
+    # 3. 받은 URL을 그대로 반환합니다.
+    return output_url

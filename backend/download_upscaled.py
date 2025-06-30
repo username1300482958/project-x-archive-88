@@ -1,5 +1,3 @@
-# download_upscaled.py
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -9,7 +7,10 @@ import traceback
 from .database import get_db
 from .models import User, Logo, Download
 from .auth_jwt_utils import get_user_with_plan
-from .upscale_utils import upscale_image_with_replicate
+# ▼▼▼▼ [수정 1] 새로운 최적화 함수를 임포트합니다. ▼▼▼▼
+from .upscale_utils import get_replicate_upscale_url # 이전 함수 대신 이것을 사용합니다.
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
 from .s3_utils import generate_presigned_url_from_s3_url
 
 router = APIRouter(
@@ -58,22 +59,28 @@ def download_highres_logo(
     if not logo or not logo.s3_url_original:
         raise HTTPException(status_code=404, detail="업스케일링할 원본 로고를 찾을 수 없습니다.")
 
-    # 4. 업스케일링 및 URL 생성 (성공이 검증된 로직)
+    # --- 4. 업스케일링 URL 생성 (최적화된 방식) ---
     try:
+        # Replicate에 전달할 원본 이미지의 임시 URL 생성 (이 부분은 동일)
         presigned_original_url = generate_presigned_url_from_s3_url(
             logo.s3_url_original,
-            expiration=300
+            expiration=300 # 5분 유효
         )
         if not presigned_original_url:
             raise RuntimeError("원본 이미지의 임시 접근 주소 생성에 실패했습니다.")
         
-        final_download_url = upscale_image_with_replicate(presigned_original_url, scale=2)
+        # ▼▼▼▼ [수정 2] 새로운 최적화 함수를 호출합니다. ▼▼▼▼
+        # 이 함수는 더 이상 우리 서버의 메모리를 사용하지 않고,
+        # Replicate가 생성한 결과물의 URL을 즉시 반환합니다.
+        final_download_url = get_replicate_upscale_url(presigned_original_url, scale=2)
+        # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
     except Exception as e:
         error_detail = str(e)
         print(f"❌ 업스케일링 실패: {error_detail}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"업스케일링 실패: {error_detail}")
+
 
     # 5. 성공 시 다운로드 기록 DB에 저장
     try:

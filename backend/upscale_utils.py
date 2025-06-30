@@ -1,4 +1,4 @@
-# upscale_utils.py (진단 완료 최종본)
+# upscale_utils.py (진단 완료 최종본2)
 
 import os
 import replicate

@@ -18,7 +18,6 @@ from fastapi import FastAPI, HTTPException, Query, Depends, Request, Header, API
 from fastapi.responses import FileResponse, RedirectResponse, JSONResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
-from fastapi_utils.tasks import repeat_every
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, text
@@ -36,7 +35,6 @@ from .schemas import BulkDeleteRequest
 from .utils import get_client_ip, log_error
 from .utils_watermark import apply_rotated_watermark
 from .s3_utils import upload_to_s3, generate_presigned_url_from_s3_url, delete_from_s3
-from .s3_cleanup import clean_expired_s3_logos
 from .openai_utils import generate_logo_image
 from .logo_prompt_optimizer import generate_prompt_with_gpt
 from .auth_jwt_utils import get_current_user, get_user_with_plan, verify_token
@@ -590,12 +588,6 @@ app.include_router(payment_router)
 @app.get("/auth/google/client-id")
 async def get_google_client_id():
     return {"client_id": os.getenv("GOOGLE_CLIENT_ID")}
-
-# --- 예약 작업 ---
-@app.on_event("startup")
-@repeat_every(seconds=86400) # 24시간마다 자동 실행
-def schedule_s3_cleanup():
-    clean_expired_s3_logos()
 
 # --- 메인 실행 ---
 if __name__ == "__main__":

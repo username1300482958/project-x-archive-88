@@ -66,3 +66,6 @@ def clean_expired_s3_logos():
     finally:
         db.close()
         print("🧹 S3 정리 작업 종료")
+
+if __name__ == "__main__":
+    clean_expired_s3_logos()

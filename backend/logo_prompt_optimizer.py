@@ -47,6 +47,7 @@ def generate_prompt_with_gpt(
     elif background.lower() == 'black':
         background_instruction = "a solid pure black background (#000000)"
 
+    # --- [핵심 수정] GPT-4o에 대한 시스템 메시지를 '창의적 미션' 형태로 변경 ---
     system_msg = {
         "role": "system",
         "content": """
@@ -69,11 +70,10 @@ You have the creative freedom to find the most natural and powerful phrasing. Th
     }
 
     # --- 사용자 요청 구성 ---
+    # GPT-4o가 창의력을 발휘할 수 있도록 정보를 명확히 전달합니다.
     prompt_lines = [
         "Please generate a single, powerful DALL-E prompt based on the following creative brief:",
-        # ✨ 수정된 부분 시작
-        f"- Core Object to visualize: '{core_object if core_object and core_object.strip() else f'a symbol that represents the brand name: {brand_name}'}'",
-        # ✨ 수정된 부분 끝
+        f"- Core Object to visualize: '{core_object if core_object else 'an abstract shape'}'",
         f"- Desired Colors to integrate: {colors_str if colors else 'Monochromatic / Black & White'}",
         f"- Visual Style to apply: {style_description}",
         f"- Logo Type: '{logo_style}'",
@@ -86,7 +86,7 @@ You have the creative freedom to find the most natural and powerful phrasing. Th
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[system_msg, {"role": "user", "content": user_request}],
-            temperature=0.5,
+            temperature=0.5, # 창의성을 약간 높여 자연스러운 문장 생성을 유도
         )
         final_prompt = response.choices[0].message.content.strip()
         

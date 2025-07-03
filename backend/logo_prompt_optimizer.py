@@ -1,14 +1,28 @@
 import os
+import re
 from typing import List, Dict, Optional
+from openai import OpenAI
 
-# 스타일 사전을 간결한 키워드 묶음으로 정의
+# --- 환경 변수 로드 ---
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY가 설정되지 않았습니다.")
+
+client = OpenAI(api_key=OPENAI_API_KEY)
+
 STYLE_DICTIONARY: Dict[str, str] = {
-    "Minimalist": "minimalist, simple, clean, flat icon",
-    "Modern": "modern, sleek, professional, clean lines",
-    "Playful": "playful, whimsical, fun, friendly, cartoon",
+    "Minimalist": (
+        "ultra-minimalist logo, focusing on a single, simple icon. "
+        "Use extremely clean, thin lines (IMPORTANT: not bold or thick). "
+        "2D flat vector style. Must use the requested solid colors, with no gradients. "
+        "Emphasize negative space and high contrast. "
+        "The final image must contain ONLY the icon, with absolutely no text or letters."
+    ),
+    "Modern": "sleek, abstract shapes, bold typography, functional, uncluttered, forward-thinking aesthetic",
+    "Playful": "rounded corners, whimsical characters, bright and vibrant colors, fun and approachable typography, cartoonish elements",
 }
 
-def generate_direct_prompt(
+def generate_prompt_with_gpt(
     brand_name: str,
     logo_style: str,
     style_detail: Optional[str],
@@ -18,45 +32,71 @@ def generate_direct_prompt(
     background: str
 ) -> str:
     
-    print("✅ FINAL VERSION: Keyword-based Direct Prompt Generation ACTIVATED")
-
-    # 1. 주제(Subject) 결정
-    if core_object and core_object.strip():
-        subject = core_object
-    else:
-        # 브랜드 이름에서 커피 관련 키워드가 있는지 마지막으로 확인
-        if "coffee" in brand_name.lower() or "cafe" in brand_name.lower():
-            subject = "a coffee bean symbol"
-        else:
-            # 그 외에는 브랜드 이름 자체를 상징물로 간주
-            subject = f"a symbol for {brand_name}"
-
-    # 2. 프롬프트 키워드 리스트 생성
-    prompt_parts = ["2D vector logo"] # 모든 프롬프트의 시작
-    prompt_parts.append(subject)
-
-    # 3. 텍스트 키워드 추가
-    if logo_style.lower() in ["mixed", "text"]:
-        font_instruction = f"'{font_style}' font" if font_style else "modern clean font"
-        prompt_parts.append(f"text '{brand_name}'")
-        prompt_parts.append(font_instruction)
-
-    # 4. 스타일 키워드 추가
-    style_key = style_detail.capitalize() if style_detail else "Modern"
-    prompt_parts.append(STYLE_DICTIONARY.get(style_key, STYLE_DICTIONARY["Modern"]))
+    print(f"✅ '{style_detail}' 스타일 감지. GPT-4o 프롬프트 생성 로직을 사용합니다.")
     
-    # 5. 색상 키워드 추가
-    if colors:
-        colors_str = " ".join([f"'{c}'" for c in colors])
-        prompt_parts.append(f"color palette {colors_str}")
+    colors_str = ", ".join(f"#{c.lstrip('#')}" for c in colors)
+    
+    style_key = style_detail.capitalize() if style_detail else ""
+    style_description = ""
+    if style_key in STYLE_DICTIONARY:
+        style_description = f"The required visual style is '{style_key}', which should be interpreted as: {STYLE_DICTIONARY[style_key]}."
 
-    # 6. 배경 및 금지어(Negative Prompt) 키워드 추가
-    prompt_parts.append("on a solid white background")
-    prompt_parts.append("simple, clean design")
-    # 아래는 DALL-E가 엉뚱한 짓을 못하게 막는 금지어들입니다.
-    prompt_parts.append("no realistic photo, no 3d render, no gradients, no shadows, no mockup, no poster, no complex background, no extra text")
+    background_instruction = f"solid {background} background"
+    if background.lower() == 'white':
+        background_instruction = "a solid pure white background (#FFFFFF)"
+    elif background.lower() == 'black':
+        background_instruction = "a solid pure black background (#000000)"
 
-    # 최종 프롬프트 조합
-    final_prompt = ", ".join(prompt_parts)
-    print(f"✅ FINAL KEYWORD PROMPT: {final_prompt}")
-    return final_prompt
+    system_msg = {
+        "role": "system",
+        "content": """
+You are a master DALL-E prompt artist, skilled in creating prompts with creative and nuanced language. Your goal is to translate user needs into a prompt that generates a beautiful and accurate logo.
+
+**YOUR #1 MISSION: GUARANTEE COLOR ACCURACY**
+DALL-E often ignores color requests. To overcome this, you MUST creatively and grammatically weave the requested color(s) into the description of the 'Core Object' itself. The color must feel like an intrinsic, essential part of the subject, not a tacked-on afterthought.
+
+- **Bad prompt:** "Logo of a lion wearing a crown, in gold." (Color is an afterthought)
+- **Good prompt:** "Logo of a lion with a brilliant golden crown." (Color is integrated naturally)
+- **Good prompt:** "A minimalist logo of a majestic lion, its crown rendered in solid gold." (Creative integration)
+
+You have the creative freedom to find the most natural and powerful phrasing. This applies to ANY 'Core Object', whether it's a single word ('brain') or a complex phrase ('a phoenix rising from a book').
+
+**Other Rules:**
+1.  **Direct & Effective:** The final prompt must be a single, direct command for DALL-E.
+2.  **No Text for Symbols:** For 'Symbol' logos, use a strong negative prompt to ensure NO text is generated.
+3.  **Respect the Style:** Fully utilize the provided 'Visual Style' description in your final prompt.
+"""
+    }
+
+    # --- 사용자 요청 구성 ---
+    prompt_lines = [
+        "Please generate a single, powerful DALL-E prompt based on the following creative brief:",
+        # ✨ 수정된 부분 시작
+        f"- Core Object to visualize: '{core_object if core_object and core_object.strip() else f'a symbol that represents the brand name: {brand_name}'}'",
+        # ✨ 수정된 부분 끝
+        f"- Desired Colors to integrate: {colors_str if colors else 'Monochromatic / Black & White'}",
+        f"- Visual Style to apply: {style_description}",
+        f"- Logo Type: '{logo_style}'",
+        f"- Background: {background_instruction}",
+    ]
+
+    user_request = "\n".join(prompt_lines)
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[system_msg, {"role": "user", "content": user_request}],
+            temperature=0.5,
+        )
+        final_prompt = response.choices[0].message.content.strip()
+        
+        if logo_style.lower() == "symbol":
+            final_prompt += " --style raw --no text, letters, words, fonts, typography, signature, watermark"
+            
+        final_prompt = re.sub(r'Prompt:|"', '', final_prompt).strip()
+        
+        print(f"✅ GPT-4o가 생성한 최종 프롬프트: {final_prompt}")
+        return final_prompt
+    except Exception as e:
+        print(f"❌ GPT-4o 프롬프트 생성 중 오류 발생: {e}")
+        return f"2D vector logo for '{brand_name}', {style_detail} style, on a {background} background."

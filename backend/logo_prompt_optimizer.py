@@ -102,7 +102,8 @@ def generate_prompt_with_gpt(
     colors: List[str], background: str
 ) -> str:
 
-    final_style_detail = style_detail if style_detail else "Modern"
+    # ✨ 이 부분을 'Playful'로 강제 고정합니다.
+    final_style_detail = "Playful"
 
     # 1. GPT-4o를 이용해 최적의 '스타일 키워드 뭉치'를 생성
     style_keywords = _get_style_keywords_from_gpt(final_style_detail)

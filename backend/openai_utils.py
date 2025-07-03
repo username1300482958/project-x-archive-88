@@ -17,6 +17,7 @@ def generate_logo_image(prompt: str) -> str:
             size="1024x1024",
             quality="standard",
             n=1,
+            style="natural",
             response_format="b64_json",
         )
 

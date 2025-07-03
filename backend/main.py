@@ -36,7 +36,7 @@ from .utils import get_client_ip, log_error
 from .utils_watermark import apply_rotated_watermark
 from .s3_utils import upload_to_s3, generate_presigned_url_from_s3_url, delete_from_s3
 from .openai_utils import generate_logo_image
-from .logo_prompt_optimizer import generate_prompt_with_gpt
+from .logo_prompt_optimizer import generate_direct_prompt
 from .auth_jwt_utils import get_current_user, get_user_with_plan, verify_token
 from .config import BASE_BACKEND_URL
 
@@ -293,7 +293,7 @@ async def generate_logo(
         logo_id = str(uuid.uuid4())
         logo_filename = f"{logo_id}.png"
 
-        prompt = generate_prompt_with_gpt(
+        prompt = generate_direct_prompt(
             brand_name=request.brand_name,
             logo_style=request.logo_style,
             font_style=request.font_style or "modern sans-serif",

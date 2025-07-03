@@ -10,20 +10,11 @@ if not OPENAI_API_KEY:
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
+# ✨ 스타일 사전을 더 명확하고 강력한 지시어로 수정
 STYLE_DICTIONARY: Dict[str, str] = {
-    "Minimalist": (
-        "an ultra-minimalist vector logo, focusing on a single, simple icon with extremely clean, thin lines. "
-        "It should be a 2D flat design that heavily emphasizes negative space and high contrast. "
-        "The final image must contain ONLY the specified icon, with absolutely no text or letters."
-    ),
-    "Modern": (
-        "a sleek and modern logo using abstract shapes. The design should feel uncluttered, forward-thinking, and functional. "
-        "Think geometric precision combined with smooth curves, embodying a contemporary and professional aesthetic."
-    ),
-    "Playful": (
-        "a fun and whimsical logo with cartoonish elements. It should feature rounded corners, bright and vibrant colors, "
-        "and an approachable, friendly character or shape. The overall mood should be cheerful and energetic."
-    ),
+    "Minimalist": "ultra-minimalist style, simple clean thin lines, 2D vector, flat icon, high-contrast, using negative space.",
+    "Modern": "modern and sleek style, clean lines, uncluttered, professional aesthetic.",
+    "Playful": "playful and whimsical cartoon style, rounded corners, fun and friendly, vibrant, energetic mood.",
 }
 
 def generate_prompt_with_gpt(
@@ -36,84 +27,75 @@ def generate_prompt_with_gpt(
     background: str
 ) -> str:
     
-    print(f"✅ '{style_detail}' 스타일 감지. GPT-4o 프롬프트 생성 로직을 사용합니다.")
+    print(f"✅ Style: '{style_detail}', Mode: GPT-4o Prompt Generation")
     
     colors_str = ", ".join(f"#{c.lstrip('#')}" for c in colors) if colors else "not specified"
     style_key = style_detail.capitalize() if style_detail else "Modern"
-    style_description = STYLE_DICTIONARY.get(style_key, STYLE_DICTIONARY["Modern"])
+    style_instruction = STYLE_DICTIONARY.get(style_key, STYLE_DICTIONARY["Modern"])
 
     background_instruction = f"on a solid {background} background"
     if background.lower() == 'white':
-        background_instruction = "on a solid pure white background (#FFFFFF)"
+        background_instruction = "on a solid pure white background, #FFFFFF"
     elif background.lower() == 'black':
-        background_instruction = "on a solid pure black background (#000000)"
+        background_instruction = "on a solid pure black background, #000000"
 
+    # ✨ 최종 전략: 시스템 메시지를 훨씬 더 강력하고 직접적인 '명령'으로 변경
     system_msg = {
         "role": "system",
         "content": """
-You are a world-class DALL-E prompt engineer specializing in logo design. Your role changes based on the user's request.
+You are a highly logical and direct DALL-E prompt generator. Your only job is to create a structured, unambiguous prompt. Do not be conversational or creative in your output format.
 
-**Core Rules (Apply to ALL tasks):**
-1.  **Enforce Color Palette:** You must weave the desired colors into the description of the core object itself, making them seem essential. Example: "A logo of a phoenix with feathers shimmering in vibrant #F97316 and radiant #FFD700 hues."
-2.  **Vector & Clean:** The final output should always be described as a '2D vector logo', 'flat icon', or similar to ensure a clean, usable result.
-3.  **Direct Command:** Your entire output must be a single, direct instruction for DALL-E, starting with "A 2D vector logo...". Do not add conversational text or quotation marks.
-4.  **Text Handling:** For 'Symbol' type logos, ensure NO text appears. For 'Text' or 'Mixed' types, the provided Brand Name is the MOST important element and must be rendered beautifully.
+**Your Task:**
+Create a single-line DALL-E prompt by assembling these components in this exact order:
+1.  **Subject:** The main visual element.
+2.  **Text (if any):** The brand name to be rendered.
+3.  **Style:** The visual style and color instructions.
+4.  **Composition:** How all elements are arranged.
+
+**Rules:**
+-   **Subject First:** The prompt MUST start with "A 2D vector logo of [Subject]...".
+-   **Text is Priority:** For 'Mixed' or 'Text' logos, the accurate rendering of the 'Brand Name' is the MOST IMPORTANT task. The prompt must explicitly state this.
+-   **Infer from Brand Name:** If the user does not provide a 'Core Object', you MUST analyze the 'Brand Name' (e.g., 'MEGACOFFEE') to infer a relevant subject (e.g., 'a coffee bean'). Do NOT use generic terms like 'abstract shape' unless the brand name itself is abstract.
+-   **Be Literal:** Follow the user's brief exactly. Do not add your own creative concepts unless explicitly asked to.
+-   Your final output must be a single line of text only.
 """
     }
 
-    # ✨ [조건부 로직] '핵심 상징물' 입력 여부에 따라 AI의 역할과 지시를 변경합니다.
+    # ✨ 최종 수정: GPT-4o에 보낼 사용자 요청을 '레시피' 형식으로 재구성
+    
+    # 1. 주제(Subject) 결정
     if core_object and core_object.strip():
-        # --- 1. 사용자가 상징물을 입력한 경우: '기술자' 모드 ---
-        print("✅ 사용자가 핵심 상징물을 입력했습니다. '기술자' 모드로 작동합니다.")
-        temperature = 0.3  # 창의성을 낮추고 지시를 정확히 따르도록 설정
-        
-        prompt_lines = [
-            "Your task is to be a precise 'Technician'. Faithfully translate the user's brief into a high-quality DALL-E prompt. Do not invent new concepts.",
-            "--- Creative Brief ---",
-            f"- Brand Name: '{brand_name}'",
-            f"- Core Object to visualize: '{core_object}'",
-            f"- Desired Colors: {colors_str}",
-            f"- Visual Style: {style_key} ({style_description})",
-            f"- Logo Type: '{logo_style}'",
-            f"- Font Style: '{font_style if font_style else 'A font that matches the visual style'}'",
-            f"- Background: {background_instruction}",
-        ]
-        if logo_style.lower() == "symbol":
-            prompt_lines.append("- IMPORTANT: This is a SYMBOL-only logo. Absolutely no text should appear.")
-
+        # 사용자가 핵심 상징물을 입력한 경우
+        subject = core_object
+        print(f"✅ Core Object provided by user: '{subject}'")
     else:
-        # --- 2. 사용자가 상징물을 입력하지 않은 경우: '크리에이티브 디렉터' 모드 ---
-        print("🟡 사용자가 핵심 상징물을 입력하지 않았습니다. '크리에이티브 디렉터' 모드로 작동합니다.")
-        temperature = 0.7  # 창의성을 높여 새로운 아이디어를 제안하도록 설정
+        # 사용자가 입력하지 않은 경우, 브랜드 이름에서 유추하도록 지시
+        subject = f"a symbol inferred from the brand name '{brand_name}'"
+        print(f"🟡 No Core Object. Instructing AI to infer from brand name: '{brand_name}'")
 
-        prompt_lines = [
-            "Your task is to be a brilliant 'Creative Director'. The user has not provided a core object. Your mission is to INVENT a compelling, symbolic object or concept based on the Brand Name and style. Then, craft a DALL-E prompt for it.",
-            "--- Creative Brief ---",
-            f"- Brand Name: '{brand_name}'",
-            f"- Desired Colors: {colors_str}",
-            f"- Visual Style: {style_key} ({style_description})",
-            f"- Logo Type: '{logo_style}'",
-            f"- Font Style: '{font_style if font_style else 'A font that matches the visual style'}'",
-            f"- Background: {background_instruction}",
-        ]
-        if logo_style.lower() == "symbol":
-            prompt_lines.append("- IMPORTANT: This is a SYMBOL-only logo. Invent a concept for the symbol, but ensure absolutely no text appears in the image.")
+    # 2. 프롬프트 구성 요소 조립
+    prompt_components = [
+        f"A 2D vector logo of {subject}."
+    ]
 
-    user_request = "\n".join(prompt_lines)
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[system_msg, {"role": "user", "content": user_request}],
-            temperature=temperature, # ✨ [조건부 로직] 동적으로 조절된 temperature 값 사용
+    # 3. 텍스트 렌더링 지시 추가
+    if logo_style.lower() in ["mixed", "text"]:
+        font_instruction = f"in a {font_style} font style" if font_style else "in a clean, modern font"
+        prompt_components.append(
+            f"Crucially, the logo MUST feature the text '{brand_name}' rendered clearly and accurately, {font_instruction}."
         )
-        final_prompt = response.choices[0].message.content.strip()
-        final_prompt = re.sub(r'^(Prompt:|Create a logo for:|A logo for|")', '', final_prompt, flags=re.IGNORECASE).strip()
-        
-        print(f"✅ GPT-4o가 생성한 최종 프롬프트: {final_prompt}")
-        return final_prompt
-    except Exception as e:
-        print(f"❌ GPT-4o 프롬프트 생성 중 오류 발생: {e}")
-        color_prompt = f"in colors {colors_str}" if colors and colors_str != "not specified" else ""
-        object_prompt = core_object if core_object else brand_name
-        return f"2D vector logo for '{object_prompt}', {style_detail} style, {color_prompt}, on a {background_instruction}."
+
+    # 4. 스타일 및 색상 지시 추가
+    color_instruction = f"The color palette must strictly be {colors_str}." if colors else "The logo should be in a simple black and white color scheme."
+    prompt_components.append(f"Style: {style_instruction}. {color_instruction}")
+
+    # 5. 배경 및 최종 지시 추가
+    prompt_components.append(f"The entire logo is {background_instruction}.")
+    if logo_style.lower() == "symbol":
+        prompt_components.append("Absolutely NO text, letters, or words in the image.")
+    
+    # 최종 프롬프트 조합
+    final_prompt = " ".join(prompt_components)
+    
+    print(f"✅ 최종 생성된 프롬프트: {final_prompt}")
+    return final_prompt

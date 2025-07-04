@@ -4,9 +4,9 @@ from typing import List, Dict, Optional
 # --- 스타일 키워드 사전 ---
 # 'Playful' 스타일만 남기고, 더 강력한 키워드로 고정합니다.
 STYLE_KEYWORDS: str = (
-    "playful logo design, simple cute cartoon character, vector illustration, "
-    "friendly and approachable, vibrant colors, rounded corners, 2D, flat, "
-    "no 3d, no photo, no realistic, no shadows, no gradients"
+    "playful but professional logo design, simple modern icon, brand identity, vector illustration, "
+    "friendly and approachable, vibrant colors, rounded shapes, 2D, flat, clean design, "
+    "no 3d, no photo, no realistic, no shadows, no gradients, no cute characters"
 )
 
 # --- 메인 함수 ---

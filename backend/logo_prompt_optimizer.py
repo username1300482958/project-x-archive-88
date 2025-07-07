@@ -4,17 +4,17 @@ from openai import OpenAI
 import traceback
 import sys
 
-# --- OpenAI 클라이언트 ---
+# --- OpenAI 클라이언트 초기화 ---
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# --- 스타일 키워드 사전 (Playful 기반) ---
+# --- 스타일 키워드 (Playful 기반) ---
 STYLE_KEYWORDS: str = (
     "playful but professional logo design, simple modern icon, brand identity, vector illustration, "
     "friendly and approachable, vibrant colors, rounded shapes, 2D, flat, clean design, "
     "no 3d, no photo, no realistic, no shadows, no gradients, no cute characters"
 )
 
-# --- GPT 기반 심볼 추론 함수 ---
+# --- GPT로 브랜드 이름 기반 심볼 추론 ---
 def call_gpt_for_symbol(brand_name: str) -> str:
     try:
         print(f"🔍 GPT를 통한 '{brand_name}' 브랜드 심볼 추론 중...")
@@ -22,8 +22,8 @@ def call_gpt_for_symbol(brand_name: str) -> str:
         system_prompt = (
             "You are a logo branding expert. Given a brand name, suggest a single clear object or metaphor "
             "that could represent it visually in a logo. The output should be simple and iconic, such as: "
-            "'a blue fox', 'a puzzle piece', 'a rocket', 'a maple leaf', 'a speech bubble', etc. "
-            "Avoid abstract concepts, avoid full scenes, and never include text in the suggestion."
+            "'a blue fox', 'a puzzle piece', 'a rocket', 'a maple leaf', etc. Avoid abstract concepts, "
+            "avoid full scenes, and never include text in the suggestion."
         )
 
         user_prompt = f"Suggest a clear visual metaphor or symbolic object for the brand name '{brand_name}'."
@@ -48,6 +48,37 @@ def call_gpt_for_symbol(brand_name: str) -> str:
         sys.stderr.write(tb + "\n")
         raise RuntimeError("GPT를 통한 심볼 추론 실패")
 
+# --- core_object를 로고에 적합한 간단한 상징으로 축약 ---
+def simplify_object_with_gpt(raw_description: str) -> str:
+    try:
+        print(f"✂️ 복잡한 상징 '{raw_description}'을 간단화 중...")
+
+        system_prompt = (
+            "You are a logo branding assistant. Simplify the following complex or verbose description into a concise object "
+            "or metaphor that can be used as a clean and iconic logo symbol. The output must be a short noun phrase like: "
+            "'a banana with a soccer ball', 'a rising sun', 'a running fox'. Avoid scenes, actions, or full sentences."
+        )
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Simplify this into a single logo symbol: {raw_description}"}
+            ],
+            temperature=0.3,
+            max_tokens=30
+        )
+
+        simplified = response.choices[0].message.content.strip().strip("'\"")
+        print(f"✅ 단순화 결과: {simplified}")
+        return simplified
+
+    except Exception as e:
+        tb = traceback.format_exc()
+        print("❌ simplify_object_with_gpt 실패:\n", tb)
+        sys.stderr.write(tb + "\n")
+        return raw_description  # fallback
+
 # --- 최종 프롬프트 생성 함수 ---
 def generate_prompt_with_gpt(
     brand_name: str,
@@ -62,7 +93,7 @@ def generate_prompt_with_gpt(
 
     # 1. 심볼(주제) 결정
     if core_object and core_object.strip():
-        subject = core_object.strip()
+        subject = simplify_object_with_gpt(core_object.strip())
     else:
         subject = call_gpt_for_symbol(brand_name)
 
@@ -74,7 +105,7 @@ def generate_prompt_with_gpt(
         font_instruction = f"in a '{font_style}' font" if font_style else "in a clean, fun font"
         prompt_parts.append(f"with the text '{brand_name}' clearly written, {font_instruction}")
 
-    # 4. 색상 지시 추가
+    # 4. 색상 지정
     if colors:
         colors_str = " and ".join([f"'{c}'" for c in colors])
         prompt_parts.append(f"strict color palette of only {colors_str}")

@@ -35,8 +35,8 @@ from .schemas import BulkDeleteRequest
 from .utils import get_client_ip, log_error
 from .utils_watermark import apply_rotated_watermark
 from .s3_utils import upload_to_s3, generate_presigned_url_from_s3_url, delete_from_s3
-from .openai_utils import generate_logo_image
-from .logo_prompt_optimizer import generate_prompt_with_gpt
+from .prompt_designer import create_design_brief_from_gpt
+from .utils_watermark import apply_watermark_to_svg
 from .auth_jwt_utils import get_current_user, get_user_with_plan, verify_token
 from .config import BASE_BACKEND_URL
 
@@ -192,19 +192,19 @@ def send_contact_message(form: ContactForm):
 async def generate_logo(
     request: LogoRequest,
     db: Session = Depends(get_db),
-    # 👇 [수정] get_user_with_plan 대신, 원래 방식인 get_current_user를 다시 사용합니다.
     user: dict = Depends(get_current_user),
     req: Request = None
 ):
-    print("🟡 generate_logo 진입")
+    print("✅ NEW PIPELINE: /generate-logo 진입")
+    
+    # --- 1. 사용자 인증, 권한 및 요금제 확인 (기존 로직 그대로 유지) ---
     client_ip = get_client_ip(req)
     print(f"📡 요청자 IP: {client_ip}")
 
-    # 🔒 권한검사
     if request.user_id != user["sub"]:
         raise HTTPException(status_code=403, detail="권한이 없습니다.")
     
-    # ✅ abuse 방지 필터링: 최근 3시간 이내 동일 IP에서 다른 FREE 계정 생성 기록 확인
+    # Abuse 방지 필터링
     three_hours_ago = datetime.utcnow() - timedelta(hours=3)
     recent_free_user_ids = (
         db.query(models.User.id)
@@ -214,8 +214,7 @@ async def generate_logo(
             models.Logo.created_at >= three_hours_ago,
             models.Logo.user_id != request.user_id
         )
-        .distinct()
-        .all()
+        .distinct().all()
     )
     recent_user_ids = [row.id for row in recent_free_user_ids]
 
@@ -225,124 +224,120 @@ async def generate_logo(
             .filter(
                 models.ErrorLog.user_id.in_(recent_user_ids),
                 models.ErrorLog.context == "AbuseCheck"
-            )
-            .all()
+            ).all()
         )
         for uid, logged_ip in recent_ips:
             if logged_ip == client_ip:
                 print(f"🚫 abuse 감지됨: IP={client_ip}, 다른 FREE 유저={uid}")
                 raise HTTPException(status_code=429, detail="FREE 요금제는 동일 IP에서 일정 시간 내 중복 생성이 제한됩니다.")
 
-    # ✅ IP 로깅 (비교용)
     log_error(user_id=request.user_id, context="AbuseCheck", message=client_ip)
 
-    # 👇 [핵심 수정] 플랜을 결정하는 로직을 함수 맨 위에 명확하게 정의합니다.
-    plan = "FREE" # 기본값
-    YOUR_DEVELOPER_USER_ID = "104120949912979219868" # 개발자님 ID
-
-    # 토큰에 admin 플래그가 있거나, 요청 user_id가 개발자 ID와 일치하면 ENTERPRISE로 설정
+    # 플랜 결정 로직
+    plan = "FREE"
+    YOUR_DEVELOPER_USER_ID = "104120949912979219868"
     if user.get("is_admin") or request.user_id == YOUR_DEVELOPER_USER_ID:
         plan = "ENTERPRISE"
         print(f"🟢 관리자/개발자 계정으로 확인됨. 플랜을 {plan}로 설정합니다.")
     else:
-        # 일반 사용자의 경우 DB에서 플랜 정보를 조회
         user_obj = db.query(models.User).filter(models.User.id == request.user_id).first()
         if user_obj and user_obj.plan:
             plan = user_obj.plan.upper()
-        # 만약 DB에도 user가 없다면, 신규 유저로 간주하고 아래에서 생성하며 plan은 'FREE' 유지
     
-    # 👇 [수정 2] 요금제 한도 확인 시, 관리자/개발자 예외 처리를 명확하게 합니다.
-    # get_user_with_plan 덕분에 user_obj.plan이 'ENTERPRISE'로 넘어옵니다.
+    # 요금제 한도 확인
     limits = PLAN_CONFIG.get(plan, PLAN_CONFIG["FREE"])
     new_logos_count = request.batch_size
-
-    # --- (이하 모든 요금제 제한 확인, 폴더 생성, 프롬프트 생성 로직은 기존과 동일) ---
     if new_logos_count > limits["max_batch"]:
-        raise HTTPException(
-            status_code=403,
-            detail=f"{plan} 플랜에서는 한 번에 최대 {limits['max_batch']}개까지 생성할 수 있습니다."
-        )
+        raise HTTPException(status_code=403, detail=f"{plan} 플랜에서는 한 번에 최대 {limits['max_batch']}개까지 생성할 수 있습니다.")
+    
     current_count = db.query(models.Logo).filter(models.Logo.user_id == request.user_id).count()
     if current_count + new_logos_count > limits["max_total"]:
-        raise HTTPException(
-            status_code=403,
-            detail=f"{plan} 플랜에서는 최대 {limits['max_total']}개의 로고까지만 생성할 수 있습니다."
-        )
+        raise HTTPException(status_code=403, detail=f"{plan} 플랜에서는 최대 {limits['max_total']}개의 로고까지만 생성할 수 있습니다.")
     
+    print(f"🟢 Plan: {plan}, Batch Size: {request.batch_size}")
     
-    sanitized_colors = [color.replace("#", "") for color in request.colors]
-    if not sanitized_colors:
-        sanitized_colors = ["000000"]  # 기본 색상: 검정
-        
-    color_key = "_".join(color.lstrip("#") for color in request.colors)
-    brand_key = request.brand_name.replace(" ", "_")
-    folder_name = f"{request.logo_style}_{color_key}_{brand_key}"
-
-    user_folder = os.path.join(BASE_LOGO_FOLDER, request.user_id, folder_name)
-    paid_folder = os.path.join(PAID_LOGO_FOLDER, request.user_id, folder_name)
-    os.makedirs(user_folder, exist_ok=True)
-    os.makedirs(paid_folder, exist_ok=True)
-
-    print("🟢 현재 요금제:", plan)
-    print("🟢 현재 생성된 로고 수:", current_count)
-    print("🟢 요청된 batch_size:", new_logos_count)
-    print("🟢 요금제 허용 최대:", limits)
-
+    # --- 2. 새로운 로고 생성 파이프라인 실행 (핵심 로직 교체) ---
     generated_logos = []
-    for _ in range(new_logos_count):
-        logo_id = str(uuid.uuid4())
-        logo_filename = f"{logo_id}.png"
+    for i in range(request.batch_size):
+        print(f"--- 로고 생성 시작 [{i+1}/{request.batch_size}] ---")
 
-        prompt = generate_prompt_with_gpt(
+        # 2-1. GPT-4o를 호출하여 사용자의 모든 선택이 반영된 '디자인 브리프'를 생성합니다.
+        design_brief = create_design_brief_from_gpt(
             brand_name=request.brand_name,
             logo_style=request.logo_style,
-            font_style=request.font_style or "modern sans-serif",
             colors=request.colors,
-            style_detail=request.style_detail,
-            core_object=request.core_object,
-            background=request.background or "black"
+            font_style=request.font_style,
+            core_object=request.core_object
         )
-        # ✅ 디버깅용 출력
-        print("🧪 최종 프롬프트:", prompt)
-
-        try:
-            generated_path = generate_logo_image(prompt)
-        except RuntimeError as e:
-            print("❌ 로고 생성 중 오류:", str(e))
-            raise HTTPException(status_code=500, detail=str(e))
-
-        # ✅ 원본 → paid 폴더로 복사
-        paid_logo_path = os.path.join(paid_folder, logo_filename)
-        shutil.copy(generated_path, paid_logo_path)
-
-        # ✅ 워터마크 버전 저장
-        logo_path = os.path.join(user_folder, logo_filename)
-        img = Image.open(generated_path)
-        img_watermarked = apply_rotated_watermark(img)
-        img_watermarked.save(logo_path)
-
-        # 👇 [핵심 수정] S3 업로드 및 DB 저장 로직
         
-        # 1. 워터마크 버전 S3 업로드
-        print("📤 [1/2] 워터마크 버전 S3 업로드 시도...")
-        s3_url = upload_to_s3(logo_path, f"{request.user_id}/{folder_name}/watermarked/{logo_filename}")
+        if "error" in design_brief:
+            print(f"❌ 디자인 브리프 생성 실패: {design_brief['error']}")
+            continue
+
+        # 2-2. SVG '리모델링': 플레이스홀더를 실제 값으로 교체합니다.
+        svg_template = design_brief.get("svg_template", "")
         
-        # 2. 원본 버전 S3 업로드
-        print("📤 [2/2] 원본 버전 S3 업로드 시도...")
-        s3_url_original = upload_to_s3(paid_logo_path, f"{request.user_id}/{folder_name}/original/{logo_filename}")
+        # 폰트 결정: 사용자가 선택한 폰트 > AI가 제안한 폰트 > 기본 폰트 순으로 적용
+        font_map = {
+            "modern": '"Noto Sans KR", sans-serif',
+            "classic": '"Nanum Myeongjo", serif',
+            "rounded": '"Cafe24Ssurround", cursive',
+            "handwritten": '"Dongle", cursive'
+        }
+        final_font_family = font_map.get(request.font_style, design_brief.get("font_suggestion", "Arial, sans-serif"))
+
+        # 색상 결정: 사용자가 선택한 색상 > AI가 제안한 색상 > 기본 색상 순으로 적용
+        palette = design_brief.get("color_palette", {})
+        final_colors = request.colors if request.colors else list(palette.values())
         
-        # 3. 두 URL이 모두 정상적으로 생성되었는지 반드시 확인합니다.
-        if not s3_url or not s3_url_original:
-            logging.error(f"S3 업로드 실패: watermarked={s3_url}, original={s3_url_original}")
-            raise HTTPException(status_code=500, detail="로고를 클라우드에 업로드하는 데 실패했습니다.")
+        svg_content = svg_template.replace("{{BRAND_NAME}}", request.brand_name)
+        svg_content = svg_content.replace("{{COLOR_PRIMARY}}", final_colors[0] if len(final_colors) > 0 else "#000000")
+        svg_content = svg_content.replace("{{COLOR_SECONDARY}}", final_colors[1] if len(final_colors) > 1 else (final_colors[0] if len(final_colors) > 0 else "#CCCCCC"))
+        svg_content = svg_content.replace("{{COLOR_TEXT}}", final_colors[0] if len(final_colors) > 0 else "#000000")
+        
+        # 2-3. 최종 SVG 파일 저장 및 S3 업로드
+        logo_uuid = uuid.uuid4()
+        logo_filename_svg = f"{logo_uuid}.svg"
+        
+        color_key = "_".join(color.lstrip("#") for color in request.colors)
+        brand_key = request.brand_name.replace(" ", "_")
+        folder_name = f"{request.logo_style}_{color_key}_{brand_key}"
+        
+        paid_folder = os.path.join(PAID_LOGO_FOLDER, request.user_id, folder_name)
+        os.makedirs(paid_folder, exist_ok=True)
+        paid_logo_path = os.path.join(paid_folder, logo_filename_svg)
+        with open(paid_logo_path, "w", encoding="utf-8") as f:
+            f.write(svg_content)
+            
+        user_folder = os.path.join(BASE_LOGO_FOLDER, request.user_id, folder_name)
+        os.makedirs(user_folder, exist_ok=True)
+        watermarked_logo_path = os.path.join(user_folder, logo_filename_svg)
+        # --- 👇 이 부분이 교체됩니다 ---
+        # 1. 원본 SVG 파일 내용을 읽어옵니다.
+        with open(paid_logo_path, "r", encoding="utf-8") as f:
+            original_svg_content = f.read()
+        
+        # 2. 새로운 SVG 워터마크 함수를 호출합니다.
+        watermarked_svg_content = apply_watermark_to_svg(original_svg_content)
+
+        # 3. 워터마크가 적용된 내용을 새로운 파일에 씁니다.
+        with open(watermarked_logo_path, "w", encoding="utf-8") as f:
+            f.write(watermarked_svg_content)
+        # --- 👆 여기까지 ---
+        
+        print("📤 S3 업로드 시도...")
+        s3_url_original = upload_to_s3(paid_logo_path, f"{request.user_id}/{folder_name}/original/{logo_filename_svg}")
+        s3_url_watermarked = upload_to_s3(watermarked_logo_path, f"{request.user_id}/{folder_name}/watermarked/{logo_filename_svg}")
+        
+        if not s3_url_original or not s3_url_watermarked:
+            raise HTTPException(status_code=500, detail="클라우드 업로드 실패")
         
         print("✅ S3 업로드 성공. DB 저장 시작...")
-
         db_logo = models.Logo(
             user_id=request.user_id,
-            logo_path=paid_logo_path,  # 👈 [수정 1] 원본 로컬 경로로 저장
-            s3_url=s3_url if s3_url else "", # 워터마크 버전 S3 URL
-            s3_url_original=s3_url_original if s3_url_original else "", # 👈 [수정 2] 원본 S3 URL 추가
+            logo_path=paid_logo_path,
+            s3_url=s3_url_watermarked,
+            s3_url_original=s3_url_original,
             brand_name=request.brand_name,
             logo_style=request.logo_style,
             colors=",".join(request.colors)
@@ -354,7 +349,7 @@ async def generate_logo(
 
         generated_logos.append({
             "logo_id": db_logo.id,
-            "logo_url": s3_url # 프론트엔드 그리드에는 워터마크 버전을 보여줌
+            "logo_url": s3_url_watermarked
         })
 
     return {"user_id": request.user_id, "logos": generated_logos}

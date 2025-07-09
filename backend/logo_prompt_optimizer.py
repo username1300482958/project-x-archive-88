@@ -17,11 +17,12 @@ def generate_design_brief(
 ) -> Dict[str, Any]:
     try:
         print(f"🎯 디자인 브리프 생성 시작 - 브랜드명: '{brand_name}', 스타일: '{logo_style}'")
+        print(f"📌 전달된 core_object: '{core_object}'")
 
         color_str = ", ".join(colors) if colors else "vibrant colors"
         font_desc = font_style or "modern sans-serif"
 
-        # ✅ 1. 사용자 입력이 core_object에 있으면 GPT 호출 생략
+        # ✅ 1. core_object가 명시적으로 입력된 경우 GPT 호출 생략
         if core_object and core_object.strip():
             prompt = (
                 f"A symbolic logo of {core_object.strip()}, "
@@ -31,15 +32,15 @@ def generate_design_brief(
                 prompt += f" with the text '{brand_name}' in a '{font_desc}' font"
 
             return {
-                "core_object": (core_object or result.get("core_object") or "").strip(),
-                "final_prompt": result.get("final_prompt"),
-                "font_style": font_style or result.get("font_style"),
-                "colors": colors if colors else result.get("colors", []),
-                "layout": result.get("layout"),
-                "svg_template": result.get("svg_template"),
+                "core_object": core_object.strip(),
+                "final_prompt": prompt,
+                "font_style": font_desc,
+                "colors": colors,
+                "layout": "icon left, text right",
+                "svg_template": None
             }
 
-        # ✅ 2. GPT 호출 (모든 항목 응답받되, 사용자 입력 우선 적용)
+        # ✅ 2. GPT 호출
         system_prompt = (
             "You are a senior logo designer AI that creates brand identity systems for startups.\n"
             "Given a brand name and style preference, respond ONLY with the following JSON:\n"
@@ -73,13 +74,25 @@ def generate_design_brief(
             response_format="json"
         )
 
-        raw = response.choices[0].message.content.strip()
-        print(f"🧠 GPT 응답:\n{raw}")
-        result = json.loads(raw)
+        # ✅ 응답 유효성 검사
+        message = response.choices[0].message
+        if not message or not message.content:
+            raise RuntimeError("❌ GPT 응답이 비어 있음 (message.content 없음)")
 
-        # ✅ 사용자 입력을 우선 반영하여 덮어쓰기
+        raw = message.content.strip()
+        print(f"🧠 GPT 응답 원문:\n{raw}")
+
+        # ✅ JSON 파싱 검증
+        try:
+            result = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise RuntimeError(f"❌ GPT 응답 JSON 파싱 실패:\n{raw}\n\n{e}")
+
+        if not isinstance(result, dict) or "final_prompt" not in result:
+            raise RuntimeError("❌ GPT 응답 포맷 오류 또는 필수 필드(final_prompt) 누락")
+
         return {
-            "core_object": core_object.strip() if core_object else result.get("core_object"),
+            "core_object": result.get("core_object", "").strip(),
             "final_prompt": result.get("final_prompt"),
             "font_style": font_style or result.get("font_style"),
             "colors": colors if colors else result.get("colors", []),

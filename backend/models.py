@@ -42,6 +42,10 @@ class Logo(Base):
     s3_uploaded = Column(Boolean, nullable=False, default=False)
     s3_uploaded_at = Column(TIMESTAMP, nullable=True)
 
+    # ✅ 추가: GPT 기반 추론 결과 저장용
+    core_object = Column(String(255), nullable=True)     # 예: "a fox holding a flag"
+    raw_prompt = Column(String(1000), nullable=True)      # 최종 DALL·E 프롬프트
+
 # Favorite 테이블 (추가)
 class Favorite(Base):
     __tablename__ = "favorites"

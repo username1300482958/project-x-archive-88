@@ -294,6 +294,8 @@ async def generate_logo(
         logo_id = str(uuid.uuid4())
         logo_filename = f"{logo_id}.png"
 
+        print(f"📌 전달된 core_object: {request.core_object!r}")
+
         # ✅ 새로운 brief 기반 생성
         try:
             brief = generate_design_brief(

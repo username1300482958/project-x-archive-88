@@ -31,12 +31,12 @@ def generate_design_brief(
                 prompt += f" with the text '{brand_name}' in a '{font_desc}' font"
 
             return {
-                "core_object": core_object.strip(),
-                "final_prompt": prompt,
-                "font_style": font_desc,
-                "colors": colors,
-                "layout": "icon left, text right",
-                "svg_template": None
+                "core_object": (core_object or result.get("core_object") or "").strip(),
+                "final_prompt": result.get("final_prompt"),
+                "font_style": font_style or result.get("font_style"),
+                "colors": colors if colors else result.get("colors", []),
+                "layout": result.get("layout"),
+                "svg_template": result.get("svg_template"),
             }
 
         # ✅ 2. GPT 호출 (모든 항목 응답받되, 사용자 입력 우선 적용)

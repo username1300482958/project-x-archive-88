@@ -36,7 +36,7 @@ from .utils import get_client_ip, log_error
 from .utils_watermark import apply_rotated_watermark
 from .s3_utils import upload_to_s3, generate_presigned_url_from_s3_url, delete_from_s3
 from .openai_utils import generate_logo_image
-from .logo_prompt_optimizer import generate_prompt_with_gpt
+from logo_prompt_optimizer import generate_design_brief
 from .auth_jwt_utils import get_current_user, get_user_with_plan, verify_token
 from .config import BASE_BACKEND_URL
 
@@ -293,18 +293,34 @@ async def generate_logo(
         logo_id = str(uuid.uuid4())
         logo_filename = f"{logo_id}.png"
 
-        prompt = generate_prompt_with_gpt(
-            brand_name=request.brand_name,
-            logo_style=request.logo_style,
-            font_style=request.font_style or "modern sans-serif",
-            colors=request.colors,
-            style_detail=request.style_detail,
-            core_object=request.core_object,
-            background=request.background or "black"
-        )
-        # ✅ 디버깅용 출력
-        print("🧪 최종 프롬프트:", prompt)
+        # ✅ 새로운 brief 기반 생성
+        try:
+            brief = generate_design_brief(
+                brand_name=request.brand_name,
+                logo_style=request.logo_style,
+                font_style=request.font_style or "modern sans-serif",
+                colors=request.colors,
+                background=request.background or "black",
+                core_object=request.core_object
+            )
 
+            # ✅ SVG 템플릿 우선 사용
+            svg = brief.get("svg_template", "").strip()
+            if svg and "<svg" in svg and len(svg) > 50:
+                prompt = (
+                    f"Convert the following SVG layout into a high-quality logo image. "
+                    f"The SVG combines both the symbol and brand text:\n\n{svg}"
+                )
+                print("🧪 최종 프롬프트 (SVG 기반):", prompt)
+            else:
+                prompt = brief["final_prompt"]
+                print("🧪 최종 프롬프트 (기존 방식):", prompt)
+
+        except Exception as e:
+            print("❌ 프롬프트 생성 실패:", str(e))
+            raise HTTPException(status_code=500, detail="로고 프롬프트 생성 중 오류가 발생했습니다.")
+
+        # ✅ 최종 프롬프트 기반 이미지 생성
         try:
             generated_path = generate_logo_image(prompt)
         except RuntimeError as e:
@@ -340,12 +356,14 @@ async def generate_logo(
 
         db_logo = models.Logo(
             user_id=request.user_id,
-            logo_path=paid_logo_path,  # 👈 [수정 1] 원본 로컬 경로로 저장
-            s3_url=s3_url if s3_url else "", # 워터마크 버전 S3 URL
-            s3_url_original=s3_url_original if s3_url_original else "", # 👈 [수정 2] 원본 S3 URL 추가
+            logo_path=paid_logo_path,
+            s3_url=s3_url or "",
+            s3_url_original=s3_url_original or "",
             brand_name=request.brand_name,
             logo_style=request.logo_style,
-            colors=",".join(request.colors)
+            colors=",".join(request.colors),
+            core_object=brief["core_object"],      # ✅ core_object 저장
+            raw_prompt=brief["final_prompt"]       # ✅ 최종 프롬프트 저장
         )
         db.add(db_logo)
         db.commit()

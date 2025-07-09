@@ -196,6 +196,7 @@ async def generate_logo(
     user: dict = Depends(get_current_user),
     req: Request = None
 ):
+    print(f"📦 받은 request.body: {request.dict()}")
     print("🟡 generate_logo 진입")
     client_ip = get_client_ip(req)
     print(f"📡 요청자 IP: {client_ip}")

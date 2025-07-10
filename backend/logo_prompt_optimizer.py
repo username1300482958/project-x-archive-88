@@ -1,13 +1,17 @@
 import os
 import sys
 import traceback
-from typing import List, Optional
+from typing import List
 from openai import OpenAI
 
+# OpenAI 클라이언트 초기화
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# --- 장면 묘사를 상징으로 압축 ---
 def compress_scene_with_gpt(user_input: str) -> str:
+    """
+    사용자의 복잡한 묘사를 로고에 적합한 단일 상징으로 압축합니다.
+    이 함수는 사용자의 창의적인 아이디어를 AI가 이해하기 쉬운 핵심 요소로 변환하는 중요한 역할을 합니다.
+    """
     try:
         system_prompt = (
             "You are a branding assistant that transforms scene descriptions into symbolic logo elements. "
@@ -26,93 +30,59 @@ def compress_scene_with_gpt(user_input: str) -> str:
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print("⚠️ GPT 상징 압축 실패. 원문 사용:", user_input)
+        print(f"⚠️ GPT 상징 압축 실패. 원문 사용: {user_input} ({e})")
         return user_input
 
-# --- 최종 프롬프트 생성 함수 ---
-def generate_dalle_prompt_with_gpt(
-    brand_name: str,
-    logo_style: str,
-    font_style: Optional[str],
-    colors: List[str],
-    background: str,
-    core_object: Optional[str] = None,
-) -> str:
+def generate_symbol_logo_prompt(core_object: str, colors: List[str]) -> str:
+    """
+    오직 '심볼 로고' 생성을 위해, DALL-E 3를 '명령'하는 강력한 디자인 키워드 프롬프트를 생성합니다.
+    """
     try:
-        print("🧠 GPT 기반 고도화 로고 프롬프트 생성 중...")
+        print("🎨 심볼 로고 전용 '디자인 키워드' 프롬프트 생성 중...")
 
+        # 시스템 프롬프트: AI가 '그래픽 디자이너'처럼 생각하고 '명령어'를 만들도록 지시
         system_prompt = (
-            "You are a professional logo designer AI. "
-            "You generate a clean, modern, 2D, flat-style logo prompt for DALL·E. "
-            "Your output should describe only a symbolic logo design, suitable for business branding. "
-            "Avoid anything childish, cartoony, cute, 3D, or realistic. "
-            "Do not include photo elements, gradients, shadows, or background scenery. "
-            "The final prompt must be one clear English sentence describing the logo image only."
+            "You are an expert logo design prompt engineer for a vector-style AI. "
+            "Your task is to convert a user's core object and color request into a powerful, comma-separated, keyword-driven prompt. "
+            "This prompt will be used to generate a single, clean, flat, 2D vector logo icon."
+            "\n### Rules:\n"
+            "1. Start with 'flat vector logo, 2d graphic icon'.\n"
+            "2. Incorporate strong, professional design keywords: 'clean single line weight', 'minimalist', 'professional logo', 'masterpiece'.\n"
+            "3. To influence the visual style, add design platform names like 'behance, dribbble'.\n"
+            "4. The final output must be a single line of comma-separated English keywords and phrases."
         )
 
-        # 색상
-        color_part = (
-            f"Use only the following hex colors: {', '.join(colors)}."
-            if colors else
-            "Use a clean, vibrant color palette with no more than 2 tones."
-        )
+        # 심볼 설명: compress_scene_with_gpt를 거친 핵심 요소를 사용
+        symbol_desc = f"an icon of {compress_scene_with_gpt(core_object)}"
 
-        # 배경
-        background_part = f"Solid {background or 'white'} background only."
+        # 색상 설명: 명확하고 단순하게 지시
+        color_desc = f"using only solid colors: {', '.join(colors)}" if colors else "using a vibrant 2-tone solid color palette"
 
-        # 폰트
-        font_part = f"Use a {font_style} font for brand name text." if font_style else "Use a clean, modern sans-serif font."
+        # GPT에 전달할 최종 유저 프롬프트
+        user_prompt_for_gpt = f"{symbol_desc}, {color_desc}, for a modern brand."
 
-        # 심볼
-        if core_object and core_object.strip():
-            symbol_input = core_object.strip()
-            compressed = compress_scene_with_gpt(symbol_input)
-            symbol_part = f"Use the object '{compressed}' as the symbolic logo element."
-        elif logo_style.lower() == "symbol":
-            symbol_part = (
-                f"Create a symbolic logo representing the brand name '{brand_name}'. "
-                "If abstract, infer a metaphorical object suitable for a logo icon."
-            )
-        else:
-            symbol_part = (
-                f"Create a symbolic visual that reflects the brand name '{brand_name}' in a simple icon."
-            )
-
-        # 텍스트 포함 여부
-        style_lower = logo_style.lower()
-        if style_lower == "symbol":
-            text_part = "Do not include any text in the logo."
-        elif style_lower == "text":
-            text_part = f"Only include the brand name '{brand_name}' in stylized text, no icon."
-        else:  # mixed
-            text_part = f"Include both a symbolic icon and the brand name '{brand_name}' in the design."
-
-        # 최종 유저 입력 구성
-        user_prompt = "\n".join([
-            symbol_part,
-            color_part,
-            text_part,
-            font_part,
-            background_part
-        ])
-
-        # GPT 호출
+        # GPT-4o 호출하여 최종 프롬프트 생성
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
+                {"role": "user", "content": user_prompt_for_gpt}
             ],
-            temperature=0.6,
-            max_tokens=300
+            temperature=0.4,
+            max_tokens=250
         )
 
         final_prompt = response.choices[0].message.content.strip()
-        print(f"🧾 최종 DALL·E 프롬프트:\n{final_prompt}\n")
+
+        # 최종 프롬프트에 배경 및 네거티브 키워드를 추가하여 완성
+        # 이중으로 안전장치를 마련하여 DALL-E 3의 실수를 최소화합니다.
+        final_prompt += ", on a solid white background --no 3d, shadow, gradient, texture, details, text, letters, font, signature, watermark"
+
+        print(f"🧾 최종 DALL-E 프롬프트:\n{final_prompt}\n")
         return final_prompt
 
     except Exception as e:
         tb = traceback.format_exc()
-        print("❌ GPT 프롬프트 생성 실패:\n", tb)
+        print(f"❌ GPT 프롬프트 생성 실패:\n{tb}")
         sys.stderr.write(tb + "\n")
-        raise RuntimeError("DALL·E 프롬프트 생성 실패")
+        raise RuntimeError("DALL-E 프롬프트 생성 실패")

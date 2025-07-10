@@ -36,7 +36,7 @@ from .utils import get_client_ip, log_error
 from .utils_watermark import apply_rotated_watermark
 from .s3_utils import upload_to_s3, generate_presigned_url_from_s3_url, delete_from_s3
 from .openai_utils import generate_logo_image
-from .logo_prompt_optimizer import generate_dalle_prompt_with_gpt
+from .logo_prompt_optimizer import generate_symbol_logo_prompt
 from .auth_jwt_utils import get_current_user, get_user_with_plan, verify_token
 from .config import BASE_BACKEND_URL
 
@@ -293,13 +293,9 @@ async def generate_logo(
         logo_id = str(uuid.uuid4())
         logo_filename = f"{logo_id}.png"
 
-        prompt = generate_dalle_prompt_with_gpt(
-            brand_name=request.brand_name,
-            logo_style=request.logo_style,
-            font_style=request.font_style or "modern sans-serif",
-            colors=request.colors,
-            background=request.background or "white",
-            core_object=request.core_object
+        prompt = generate_symbol_logo_prompt(
+            core_object=request.core_object or request.brand_name,
+            colors=request.colors
         )
         # ✅ 디버깅용 출력
         print("🧪 최종 프롬프트:", prompt)

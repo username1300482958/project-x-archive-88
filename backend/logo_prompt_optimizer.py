@@ -9,15 +9,16 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def compress_scene_with_gpt(user_input: str) -> str:
     """
-    사용자의 복잡한 묘사를 로고에 적합한 단일 상징으로 압축합니다.
-    이 함수는 사용자의 창의적인 아이디어를 AI가 이해하기 쉬운 핵심 요소로 변환하는 중요한 역할을 합니다.
+    사용자의 복잡한 묘사를 로고에 적합한 핵심 상징으로 압축합니다.
     """
     try:
+        # 시스템 프롬프트를 더 명확하게 수정: '핵심 상징 요소'를 강조
         system_prompt = (
-            "You are a branding assistant that transforms scene descriptions into symbolic logo elements. "
-            "If the input describes an action, event, or situation (e.g. 'a fox jumping over fire'), "
-            "convert it into a symbolic concept suitable for a logo (e.g. 'fox and fire icon'). "
-            "If already suitable, return it as-is. Output must be a short phrase."
+            "You are a branding expert. Your task is to distill a user's description "
+            "into a concise 2-5 word phrase representing the core symbolic elements for a logo. "
+            "Example: 'a fox jumping over fire' becomes 'fox and fire'. "
+            "Example: 'a roaring lion wearing a crown' becomes 'crowned lion head'."
+            "Output must be a short phrase in English."
         )
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -25,58 +26,61 @@ def compress_scene_with_gpt(user_input: str) -> str:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_input}
             ],
-            temperature=0.2,
+            temperature=0.1,
             max_tokens=50
         )
-        return response.choices[0].message.content.strip()
+        return response.choices[0].message.content.strip().lower()
     except Exception as e:
         print(f"⚠️ GPT 상징 압축 실패. 원문 사용: {user_input} ({e})")
         return user_input
 
 def generate_symbol_logo_prompt(core_object: str, colors: List[str]) -> str:
     """
-    오직 '심볼 로고' 생성을 위해, DALL-E 3를 '명령'하는 강력한 디자인 키워드 프롬프트를 생성합니다.
+    오직 '심볼 로고' 생성을 위해, DALL-E 3를 '명령'하는 강력하고 명확한 프롬프트를 생성합니다.
+    포스터나 목업이 아닌, 순수한 로고 아이콘 생성을 목표로 합니다.
     """
     try:
         print("🎨 심볼 로고 전용 '디자인 키워드' 프롬프트 생성 중...")
 
-        # 시스템 프롬프트: AI가 '그래픽 디자이너'처럼 생각하고 '명령어'를 만들도록 지시
+        # --- 핵심 수정 사항: 시스템 프롬프트를 완전히 재구성 ---
+        # 모호한 키워드(dribbble, behance)를 제거하고, '고립된 심볼'임을 명확히 지시합니다.
         system_prompt = (
-            "You are an expert logo design prompt engineer for a vector-style AI. "
-            "Your task is to convert a user's core object and color request into a powerful, comma-separated, keyword-driven prompt. "
-            "This prompt will be used to generate a single, clean, flat, 2D vector logo icon."
+            "You are an expert prompt engineer for DALL-E, specializing in minimalist vector logos. "
+            "Your task is to create a direct, keyword-focused prompt to generate a single, unified, and isolated logo symbol. "
+            "The output must NOT be a poster, mock-up, or a scene."
             "\n### Rules:\n"
-            "1. Start with 'flat vector logo, 2d graphic icon'.\n"
-            "2. Incorporate strong, professional design keywords: 'clean single line weight', 'minimalist', 'professional logo', 'masterpiece'.\n"
-            "3. To influence the visual style, add design platform names like 'behance, dribbble'.\n"
-            "4. The final output must be a single line of comma-separated English keywords and phrases."
+            "1.  **Subject First:** Start with a clear description, like `A logo of {core_object}` or `A symbol combining {elements}`.\n"
+            "2.  **Style Keywords:** Use precise terms like `flat icon`, `vector logo`, `minimalist design`, `clean lines`, `solid colors`.\n"
+            "3.  **Composition:** The elements must form a `single unified symbol`.\n"
+            "4.  **Background:** Crucially, specify that the logo must be `isolated on a plain white background`. The word 'isolated' is key.\n"
+            "5.  **Final Output:** Must be a single line of comma-separated English keywords.\n"
+            "\n### What to AVOID:\n"
+            "Do NOT use ambiguous style words like `behance`, `dribbble`, `masterpiece`, `professional logo`, `modern brand`. These often lead to unwanted poster or mock-up results."
         )
 
-        # 심볼 설명: compress_scene_with_gpt를 거친 핵심 요소를 사용
-        symbol_desc = f"an icon of {compress_scene_with_gpt(core_object)}"
+        # compress_scene_with_gpt를 거친 핵심 요소를 사용
+        compressed_object = compress_scene_with_gpt(core_object)
 
-        # 색상 설명: 명확하고 단순하게 지시
-        color_desc = f"using only solid colors: {', '.join(colors)}" if colors else "using a vibrant 2-tone solid color palette"
+        # 색상 설명
+        color_desc = f"using only the solid colors: {', '.join(colors)}" if colors else "using a vibrant 2-tone solid color palette"
 
-        # GPT에 전달할 최종 유저 프롬프트
-        user_prompt_for_gpt = f"{symbol_desc}, {color_desc}, for a modern brand."
+        # GPT에 전달할 유저 프롬프트 (더 단순하고 명확하게)
+        user_prompt_for_gpt = f"Core Object: `{compressed_object}`, Colors: `{color_desc}`"
 
-        # GPT-4o 호출하여 최종 프롬프트 생성
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt_for_gpt}
             ],
-            temperature=0.4,
+            temperature=0.2, # 더 일관된 결과를 위해 온도를 낮춤
             max_tokens=250
         )
 
         final_prompt = response.choices[0].message.content.strip()
 
-        # 최종 프롬프트에 배경 및 네거티브 키워드를 추가하여 완성
-        # 이중으로 안전장치를 마련하여 DALL-E 3의 실수를 최소화합니다.
-        final_prompt += ", on a solid white background --no 3d, shadow, gradient, texture, details, text, letters, font, signature, watermark"
+        # DALL-E가 규칙을 어길 경우를 대비한 최종 안전장치
+        final_prompt += ", --no photo, 3d, shadow, gradient, texture, details, text, letters, font, signature, watermark, mock-up, presentation"
 
         print(f"🧾 최종 DALL-E 프롬프트:\n{final_prompt}\n")
         return final_prompt
